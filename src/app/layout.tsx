@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Mini Sistema de Revisiones",
-  description: "Base del sistema para recibir revisiones desde n8n",
+  title: "SICOP Agente",
+  description: "Agente de apoyo para revisiones documentales y de codigo en el proyecto SICOP",
 };
 
 export default function RootLayout({

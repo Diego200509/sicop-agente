@@ -7,9 +7,9 @@ export default function HomePage() {
   return (
     <section className="mx-auto w-full max-w-4xl">
       <Card className="space-y-4">
-        <h2 className="text-2xl font-semibold">Inicio del sistema</h2>
+        <h2 className="text-2xl font-semibold">SICOP Agente</h2>
         <p className="text-sm text-zinc-600 dark:text-zinc-300">
-          Base inicial lista para recibir revisiones desde n8n.
+          Panel para gestionar revisiones, tareas y el asistente del proyecto SICOP.
         </p>
         <div className="flex gap-3">
           <Link href="/dashboard">

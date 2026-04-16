@@ -44,7 +44,7 @@ export function AppShell({ children, currentPath }: AppShellProps) {
             <MenuIcon className="size-5" />
           </button>
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">Mini Sistema</p>
+            <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">SICOP Agente</p>
             <p className="truncate text-xs text-zinc-500">Revisiones</p>
           </div>
         </header>
@@ -91,7 +91,7 @@ export function AppShell({ children, currentPath }: AppShellProps) {
 function Brand() {
   return (
     <div>
-      <h1 className="text-lg font-semibold">Mini Sistema</h1>
+      <h1 className="text-lg font-semibold">SICOP Agente</h1>
       <p className="text-sm text-zinc-500">Revisiones</p>
     </div>
   );
