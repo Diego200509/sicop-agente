@@ -9,7 +9,8 @@ async function getDashboardData() {
   try {
     const repository = new TareaRepository(getSupabaseClient());
     return await repository.getDashboardData();
-  } catch {
+  } catch (error) {
+    console.error("getDashboardData:", error);
     return {
       total_tareas: 0,
       total_revisiones_documentales: 0,
