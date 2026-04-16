@@ -1,5 +1,6 @@
 import { Badge } from "@/src/components/ui/badge";
 import { Card } from "@/src/components/ui/card";
+import { FormattedDate } from "@/src/components/ui/formatted-date";
 
 type RevisionCardProps = {
   tipo: "documental" | "codigo";
@@ -15,7 +16,9 @@ export function RevisionCard({ tipo, titulo, fecha, descripcion }: RevisionCardP
         <h4 className="font-semibold">{titulo}</h4>
         <Badge variant={tipo === "documental" ? "secondary" : "default"}>{tipo}</Badge>
       </div>
-      <p className="text-xs text-zinc-500">{fecha ? new Date(fecha).toLocaleString("es-ES") : "Sin fecha"}</p>
+      <p className="text-xs text-zinc-500">
+        <FormattedDate value={fecha} />
+      </p>
       <p className="text-sm text-zinc-700 dark:text-zinc-300">{descripcion}</p>
     </Card>
   );

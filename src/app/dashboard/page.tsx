@@ -1,6 +1,7 @@
 import { RevisionCard } from "@/src/components/revisiones/revision-card";
 import { Badge } from "@/src/components/ui/badge";
 import { Card } from "@/src/components/ui/card";
+import { FormattedDate } from "@/src/components/ui/formatted-date";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/src/components/ui/table";
 import { getSupabaseClient } from "@/src/lib/supabase/client";
 import { TareaRepository } from "@/src/repositories/tarea.repository";
@@ -63,7 +64,7 @@ export default async function DashboardPage() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    {revision.fecha_revision ? new Date(revision.fecha_revision).toLocaleString("es-ES") : "Sin fecha"}
+                    <FormattedDate value={revision.fecha_revision} />
                   </TableCell>
                 </TableRow>
               ))}
