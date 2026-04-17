@@ -25,15 +25,30 @@ export class TareasRepository {
     return (data?.id as string | undefined) ?? null;
   }
 
-  /** Últimas 5 tareas por updated_at */
-  async getLatestFive(): Promise<TareaContext[]> {
+  async getLatestForGeneralChat(limit: number): Promise<TareaContext[]> {
+    const safe = Math.min(50, Math.max(1, Math.floor(limit)));
     const { data, error } = await this.supabase
       .from("tareas")
       .select("id,id_tarea,titulo,fase,descripcion")
       .order("updated_at", { ascending: false })
-      .limit(5);
+      .limit(safe);
 
     if (error) throw new Error(`Error listando tareas recientes: ${error.message}`);
+    return (data ?? []) as TareaContext[];
+  }
+
+  /**
+   * Lista acotada para resolver menciones de tarea en el chat general (titulos e ids).
+   */
+  async listForMatching(limit: number): Promise<TareaContext[]> {
+    const safe = Math.min(500, Math.max(1, Math.floor(limit)));
+    const { data, error } = await this.supabase
+      .from("tareas")
+      .select("id,id_tarea,titulo,fase,descripcion")
+      .order("updated_at", { ascending: false })
+      .limit(safe);
+
+    if (error) throw new Error(`Error listando tareas para coincidencia: ${error.message}`);
     return (data ?? []) as TareaContext[];
   }
 }

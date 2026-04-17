@@ -1,21 +1,18 @@
 import OpenAI from "openai";
 
+import { getChatGeneralConfig } from "@/src/lib/chat-general-config";
+import { truncateText } from "@/src/lib/chat-text";
 import { ChatRepository } from "@/src/repositories/chat.repository";
 import { RevisionesRepository } from "@/src/repositories/revisiones.repository";
 import { TareasRepository } from "@/src/repositories/tareas.repository";
+import { buildGeneralContext, buildTaskFocusedContext } from "@/src/services/chat-general-context";
+import { resolveGeneralTaskFromMessage } from "@/src/services/chat-general-resolution";
 import type { ChatContext, ChatResponse, RevisionContext } from "@/src/types/chat";
 
 const SYSTEM_PROMPT = `Eres el asistente del proyecto SICOP. Respondes solo con base en la informacion que se te proporciona en el contexto (tareas y revisiones almacenadas en el sistema).
 Ayudas a interpretar revisiones documentales y revisiones de codigo, comparas cumplimiento, diferencias, riesgos y observaciones entre ambas cuando aplique.
 Si falta informacion en el contexto, dilo con claridad. No inventes datos ni supongas fuera del contexto.
 Responde en espanol, de forma profesional y concisa.`;
-
-function truncateText(value: string | null | undefined, max: number): string {
-  if (!value) return "";
-  const t = value.trim();
-  if (t.length <= max) return t;
-  return `${t.slice(0, max)}…`;
-}
 
 function formatRevisionDoc(r: RevisionContext | null): string {
   if (!r) return "(Sin revision documental registrada)";
@@ -97,33 +94,9 @@ export class ChatService {
       return { mode: "tarea", contextText: ctx };
     }
 
-    const tareas = await this.tareasRepo.getLatestFive();
-    const ids = tareas.map((t) => t.id);
-    const revMap = await this.revisionesRepo.getLatestDocAndCodeForTareas(ids);
-    const history = await this.chatRepo.getLastMessagesForContext(null, 6);
-
-    const bloquesTareas = tareas.map((t) => {
-      const pair = revMap.get(t.id);
-      const doc = pair?.doc ?? null;
-      const code = pair?.code ?? null;
-      return [
-        `### ${t.id_tarea} — ${t.titulo}`,
-        `Fase: ${t.fase}`,
-        `Descripcion: ${truncateText(t.descripcion, 800)}`,
-        `Documental reciente: ${doc ? truncateText(doc.analisis_documental, 400) || "(sin analisis)" : "(sin revision)"}`,
-        `Codigo reciente: ${code ? truncateText(code.analisis_codigo, 400) || "(sin analisis)" : "(sin revision)"}`,
-      ].join("\n");
-    });
-
-    const ctx = [
-      "## Ultimas tareas (max 5)",
-      bloquesTareas.length ? bloquesTareas.join("\n\n") : "(No hay tareas)",
-      "",
-      "## Ultimos mensajes del chat general (max 6)",
-      formatHistoryBlock(history),
-    ].join("\n");
-
-    return { mode: "general", contextText: ctx };
+    const config = getChatGeneralConfig();
+    const contextText = await buildGeneralContext(this.tareasRepo, this.revisionesRepo, this.chatRepo, config);
+    return { mode: "general", contextText };
   }
 
   async sendMessage(userMessage: string, tareaUuid: string | null): Promise<ChatResponse> {
@@ -134,7 +107,50 @@ export class ChatService {
 
     await this.chatRepo.insertMessage({ tareaId: tareaUuid, rol: "user", mensaje: trimmed });
 
-    const { contextText } = await this.buildContext(tareaUuid);
+    let contextText: string;
+
+    if (tareaUuid) {
+      const built = await this.buildContext(tareaUuid);
+      contextText = built.contextText;
+    } else {
+      const config = getChatGeneralConfig();
+      const pool = await this.tareasRepo.listForMatching(config.matchingPool);
+      const matchTasks = pool.map((t) => ({ id: t.id, id_tarea: t.id_tarea, titulo: t.titulo }));
+
+      const resolution = await resolveGeneralTaskFromMessage({
+        userMessage: trimmed,
+        tasks: matchTasks,
+        openai: this.openai,
+        model: this.model(),
+      });
+
+      if (resolution.kind === "ambiguous") {
+        const lines = resolution.titles.map((t) => `- ${t}`).join("\n");
+        const reply =
+          `No tengo claro a qué tarea te refieres. ¿Podrías aclarar si es alguna de estas?\n\n${lines}\n\n` +
+          `En el siguiente mensaje puedes indicar el titulo exacto o el ID de la tarjeta.`;
+
+        const saved = await this.chatRepo.insertMessage({
+          tareaId: null,
+          rol: "assistant",
+          mensaje: reply,
+        });
+
+        return { reply, messageIdAssistant: saved.id };
+      }
+
+      if (resolution.kind === "single") {
+        contextText = await buildTaskFocusedContext(
+          resolution.taskId,
+          this.tareasRepo,
+          this.revisionesRepo,
+          this.chatRepo,
+          config,
+        );
+      } else {
+        contextText = await buildGeneralContext(this.tareasRepo, this.revisionesRepo, this.chatRepo, config);
+      }
+    }
 
     const completion = await this.openai.chat.completions.create({
       model: this.model(),
