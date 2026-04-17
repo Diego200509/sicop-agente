@@ -8,6 +8,26 @@ import { Textarea } from "@/src/components/ui/textarea";
 import { cn } from "@/src/lib/utils";
 import type { ChatMessage } from "@/src/types/chat";
 
+function SendArrowIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden
+    >
+      <path
+        d="M12 19V5M5 12l7-7 7 7"
+        stroke="currentColor"
+        strokeWidth="2.25"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 type ChatPanelProps = {
   tareaId?: string | null;
   title?: string;
@@ -73,15 +93,20 @@ export function ChatPanel({ tareaId = null, title = "Asistente SICOP", className
   };
 
   return (
-    <Card className={cn("flex max-h-[min(70vh,640px)] flex-col gap-3 overflow-hidden p-4", className)}>
+    <Card
+      className={cn(
+        "flex min-h-0 flex-col gap-3 overflow-hidden p-4 sm:p-5",
+        className,
+      )}
+    >
       <div className="shrink-0">
-        <h3 className="text-lg font-semibold">{title}</h3>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+        <h3 className="text-base font-semibold leading-tight sm:text-lg">{title}</h3>
+        <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
           Pregunta sobre tareas y revisiones. El contexto enviado al modelo es acotado.
         </p>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto rounded-lg border border-zinc-200 bg-zinc-50/80 p-3 dark:border-zinc-800 dark:bg-zinc-900/40">
+      <div className="scrollbar-elegant min-h-0 flex-1 space-y-4 overflow-y-auto rounded-lg border border-zinc-200 bg-zinc-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/40">
         {loadingHistory && <p className="text-sm text-zinc-500">Cargando historial...</p>}
 
         {!loadingHistory && messages.length === 0 && (
@@ -100,7 +125,7 @@ export function ChatPanel({ tareaId = null, title = "Asistente SICOP", className
           >
             <div
               className={cn(
-                "max-w-[min(100%,42rem)] rounded-2xl px-3 py-2 text-sm leading-relaxed shadow-sm",
+                "max-w-[min(100%,52rem)] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed shadow-sm",
                 m.rol === "user"
                   ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
                   : "border border-zinc-200 bg-white text-zinc-900 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100",
@@ -126,27 +151,38 @@ export function ChatPanel({ tareaId = null, title = "Asistente SICOP", className
       </div>
 
       {error && (
-        <p className="text-sm text-rose-600 dark:text-rose-400" role="alert">
+        <p className="shrink-0 text-sm text-rose-600 dark:text-rose-400" role="alert">
           {error}
         </p>
       )}
 
-      <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-end">
+      <div className="flex shrink-0 items-end gap-1.5 rounded-2xl border border-zinc-200 bg-zinc-100/90 p-1.5 pl-2.5 dark:border-zinc-700 dark:bg-zinc-900/60">
         <Textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Escribe tu pregunta..."
           disabled={loading || loadingHistory}
+          rows={1}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
               void send();
             }
           }}
-          className="min-h-[88px] flex-1"
+          className={cn(
+            "!min-h-[40px] !max-h-[120px] !resize-none flex-1 overflow-y-auto scrollbar-elegant border-0 bg-transparent py-2.5 pl-0 text-sm leading-snug",
+            "shadow-none outline-none ring-0 placeholder:text-zinc-500 dark:bg-transparent",
+            "!focus-visible:ring-0 focus-visible:ring-offset-0",
+          )}
         />
-        <Button type="button" className="shrink-0 sm:self-stretch" disabled={loading || loadingHistory} onClick={() => void send()}>
-          Enviar
+        <Button
+          type="button"
+          disabled={loading || loadingHistory || !input.trim()}
+          onClick={() => void send()}
+          aria-label="Enviar mensaje"
+          className="size-9 shrink-0 rounded-xl p-0 sm:size-9"
+        >
+          <SendArrowIcon className="size-5" />
         </Button>
       </div>
     </Card>

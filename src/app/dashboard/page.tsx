@@ -1,4 +1,7 @@
+import Link from "next/link";
+
 import { RevisionCard } from "@/src/components/revisiones/revision-card";
+import { FaseBadge } from "@/src/components/tareas/fase-badge";
 import { Badge } from "@/src/components/ui/badge";
 import { Card } from "@/src/components/ui/card";
 import { FormattedDate } from "@/src/components/ui/formatted-date";
@@ -45,13 +48,15 @@ export default async function DashboardPage() {
 
       <Card className="space-y-3">
         <h3 className="text-lg font-semibold">Ultimas revisiones</h3>
-        <div className="overflow-x-auto rounded-md border border-zinc-200 dark:border-zinc-800">
+        <div className="scrollbar-elegant overflow-x-auto rounded-md border border-zinc-200 dark:border-zinc-800">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Tarea</TableHead>
+                <TableHead>Fase</TableHead>
                 <TableHead>Tipo</TableHead>
                 <TableHead>Fecha</TableHead>
+                <TableHead className="text-right">Accion</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -59,12 +64,27 @@ export default async function DashboardPage() {
                 <TableRow key={revision.id}>
                   <TableCell>{revision.titulo_tarea}</TableCell>
                   <TableCell>
+                    <FaseBadge fase={revision.fase_tarea} />
+                  </TableCell>
+                  <TableCell>
                     <Badge variant={revision.tipo_revision === "documental" ? "secondary" : "default"}>
                       {revision.tipo_revision}
                     </Badge>
                   </TableCell>
                   <TableCell>
                     <FormattedDate value={revision.fecha_revision} />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {revision.id_tarea ? (
+                      <Link
+                        href={`/tareas/${encodeURIComponent(revision.id_tarea)}`}
+                        className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+                      >
+                        Ver detalle
+                      </Link>
+                    ) : (
+                      "—"
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
@@ -79,8 +99,12 @@ export default async function DashboardPage() {
             key={`card-${revision.id}`}
             tipo={revision.tipo_revision}
             titulo={revision.titulo_tarea}
+            fase={revision.fase_tarea}
             fecha={revision.fecha_revision}
             descripcion={revision.descripcion || "Sin analisis registrado"}
+            detalleHref={
+              revision.id_tarea ? `/tareas/${encodeURIComponent(revision.id_tarea)}` : undefined
+            }
           />
         ))}
       </div>

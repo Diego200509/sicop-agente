@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { EstadoBadge } from "@/src/components/tareas/estado-badge";
+import { FaseBadge } from "@/src/components/tareas/fase-badge";
 import { Card } from "@/src/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/src/components/ui/table";
 
@@ -9,7 +10,7 @@ export type TareaTablaItem = {
   titulo: string;
   fase: string;
   estado_documental: "completo" | "pendiente";
-  estado_codigo: "completo" | "pendiente";
+  estado_codigo: "completo" | "pendiente" | "no_aplica";
   fecha_ultima_revision: string | null;
 };
 
@@ -20,7 +21,7 @@ type TareasTableProps = {
 export function TareasTable({ tareas }: TareasTableProps) {
   return (
     <Card className="overflow-hidden p-0">
-      <div className="w-full overflow-x-auto">
+      <div className="scrollbar-elegant w-full overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>
@@ -36,7 +37,9 @@ export function TareasTable({ tareas }: TareasTableProps) {
           {tareas.map((tarea) => (
             <TableRow key={tarea.id_tarea}>
               <TableCell className="font-medium">{tarea.titulo}</TableCell>
-              <TableCell>{tarea.fase}</TableCell>
+              <TableCell>
+                <FaseBadge fase={tarea.fase} />
+              </TableCell>
               <TableCell>
                 <EstadoBadge
                   estado={tarea.estado_documental}
@@ -46,7 +49,13 @@ export function TareasTable({ tareas }: TareasTableProps) {
               <TableCell>
                 <EstadoBadge
                   estado={tarea.estado_codigo}
-                  etiqueta={tarea.estado_codigo === "completo" ? "Completo" : "Pendiente"}
+                  etiqueta={
+                    tarea.estado_codigo === "completo"
+                      ? "Completo"
+                      : tarea.estado_codigo === "no_aplica"
+                        ? "No aplica"
+                        : "Pendiente"
+                  }
                 />
               </TableCell>
               <TableCell>

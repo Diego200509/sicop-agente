@@ -23,15 +23,18 @@ export function AppShell({ children, currentPath }: AppShellProps) {
   }, [mobileOpen]);
 
   return (
-    <div className="flex min-h-screen bg-zinc-50 dark:bg-zinc-950">
+    <div className="flex h-dvh min-h-0 overflow-hidden bg-zinc-50 dark:bg-zinc-950">
       {/* Desktop sidebar */}
-      <aside aria-label="Navegacion principal" className="hidden w-64 shrink-0 border-r border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 lg:flex lg:flex-col">
+      <aside
+        aria-label="Navegacion principal"
+        className="hidden h-dvh w-64 shrink-0 overflow-y-auto border-r border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 lg:flex lg:flex-col"
+      >
         <Brand />
         <SidebarNav currentPath={currentPath} className="mt-6" />
       </aside>
 
       {/* Mobile header */}
-      <div className="flex min-h-screen min-w-0 flex-1 flex-col lg:min-h-0">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <header className="sticky top-0 z-40 flex items-center gap-3 border-b border-zinc-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95 lg:hidden">
           <button
             type="button"
@@ -82,7 +85,9 @@ export function AppShell({ children, currentPath }: AppShellProps) {
           <SidebarNav currentPath={currentPath} onNavigate={() => setMobileOpen(false)} />
         </aside>
 
-        <main className="min-w-0 flex-1 px-4 py-4 sm:px-6 sm:py-6 lg:p-6">{children}</main>
+        <main className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-y-auto px-4 py-3 sm:px-6 sm:py-4 lg:p-5">
+          {children}
+        </main>
       </div>
     </div>
   );

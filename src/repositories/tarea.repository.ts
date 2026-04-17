@@ -1,11 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { requiresCodeReviewByPhase } from "@/src/lib/fases";
+
 export type TareaListado = {
   id_tarea: string;
   titulo: string;
   fase: string;
   estado_documental: "completo" | "pendiente";
-  estado_codigo: "completo" | "pendiente";
+  estado_codigo: "completo" | "pendiente" | "no_aplica";
   fecha_ultima_revision: string | null;
 };
 
@@ -17,7 +19,7 @@ export type TareaDetalle = {
   descripcion: string;
   url_tarjeta: string | null;
   estado_documental: "completo" | "pendiente";
-  estado_codigo: "completo" | "pendiente";
+  estado_codigo: "completo" | "pendiente" | "no_aplica";
   documental: {
     texto_pdf: string | null;
     analisis_documental: string | null;
@@ -37,9 +39,11 @@ export type DashboardData = {
   total_revisiones_codigo: number;
   ultimas_revisiones: Array<{
     id: string;
+    id_tarea: string;
     tipo_revision: "documental" | "codigo";
     fecha_revision: string | null;
     titulo_tarea: string;
+    fase_tarea: string;
     descripcion: string;
   }>;
 };
@@ -92,6 +96,7 @@ export class TareaRepository {
       const revisiones = row.revisiones ?? [];
       const hasDocumental = revisiones.some((revision) => revision.tipo_revision === "documental");
       const hasCodigo = revisiones.some((revision) => revision.tipo_revision === "codigo");
+      const codeRequired = requiresCodeReviewByPhase(row.fase);
       const ultimaRevision = revisiones
         .map((revision) => revision.fecha_revision)
         .filter(Boolean)
@@ -102,7 +107,7 @@ export class TareaRepository {
         titulo: row.titulo,
         fase: row.fase,
         estado_documental: hasDocumental ? "completo" : "pendiente",
-        estado_codigo: hasCodigo ? "completo" : "pendiente",
+        estado_codigo: codeRequired ? (hasCodigo ? "completo" : "pendiente") : "no_aplica",
         fecha_ultima_revision: (ultimaRevision as string | undefined) ?? null,
       };
     });
@@ -124,6 +129,7 @@ export class TareaRepository {
     const revisiones = (tarea.revisiones ?? []).sort(
       (a, b) => new Date(b.fecha_revision ?? 0).getTime() - new Date(a.fecha_revision ?? 0).getTime(),
     );
+    const codeRequired = requiresCodeReviewByPhase(tarea.fase);
     const revisionDocumental = revisiones.find((revision) => revision.tipo_revision === "documental");
     const revisionCodigo = revisiones.find((revision) => revision.tipo_revision === "codigo");
 
@@ -135,7 +141,7 @@ export class TareaRepository {
       descripcion: tarea.descripcion,
       url_tarjeta: tarea.url_tarjeta,
       estado_documental: revisionDocumental ? "completo" : "pendiente",
-      estado_codigo: revisionCodigo ? "completo" : "pendiente",
+      estado_codigo: codeRequired ? (revisionCodigo ? "completo" : "pendiente") : "no_aplica",
       documental: {
         texto_pdf: revisionDocumental?.texto_pdf ?? null,
         analisis_documental: revisionDocumental?.analisis_documental ?? null,
@@ -156,7 +162,7 @@ export class TareaRepository {
       this.supabase.from("revisiones").select("tipo_revision"),
       this.supabase
         .from("revisiones")
-        .select("id,tipo_revision,fecha_revision,analisis_documental,analisis_codigo,tareas(titulo)")
+        .select("id,tipo_revision,fecha_revision,analisis_documental,analisis_codigo,tareas(id_tarea,titulo,fase)")
         .order("fecha_revision", { ascending: false })
         .limit(8),
     ]);
@@ -178,16 +184,21 @@ export class TareaRepository {
         fecha_revision: string | null;
         analisis_documental: string | null;
         analisis_codigo: string | null;
-        tareas: { titulo: string } | Array<{ titulo: string }> | null;
+        tareas:
+          | { id_tarea: string; titulo: string; fase: string }
+          | Array<{ id_tarea: string; titulo: string; fase: string }>
+          | null;
       };
 
       const tareaJoin = Array.isArray(row.tareas) ? row.tareas[0] : row.tareas;
 
       return {
         id: row.id,
+        id_tarea: tareaJoin?.id_tarea ?? "",
         tipo_revision: row.tipo_revision,
         fecha_revision: row.fecha_revision,
         titulo_tarea: tareaJoin?.titulo ?? "Sin titulo",
+        fase_tarea: tareaJoin?.fase ?? "Sin fase",
         descripcion: row.tipo_revision === "documental" ? row.analisis_documental ?? "" : row.analisis_codigo ?? "",
       };
     });

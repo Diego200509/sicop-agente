@@ -10,7 +10,7 @@ type TareaDetalle = {
   descripcion: string;
   url_tarjeta: string | null;
   estado_documental: "completo" | "pendiente";
-  estado_codigo: "completo" | "pendiente";
+  estado_codigo: "completo" | "pendiente" | "no_aplica";
   documental: {
     texto_pdf: string | null;
     analisis_documental: string | null;
