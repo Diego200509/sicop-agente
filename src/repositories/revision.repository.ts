@@ -124,7 +124,6 @@ export class SupabaseRevisionRepository implements RevisionRepository {
   constructor(private readonly supabase: SupabaseClient) {}
 
   private async findTareaByMergeKey(mergeKey: string): Promise<TareaRecord | null> {
-    console.log("[SupabaseRevisionRepository] consulta por merge_key:", mergeKey);
     const { data, error } = await this.supabase
       .from("tareas")
       .select("id, id_tarea")
@@ -134,15 +133,9 @@ export class SupabaseRevisionRepository implements RevisionRepository {
       .maybeSingle();
 
     if (error) {
-      console.error("[SupabaseRevisionRepository] error Supabase (merge_key):", error);
       throw new Error(formatSupabaseError("Error al buscar tarea por merge_key", error));
     }
 
-    if (data) {
-      console.log("[SupabaseRevisionRepository] tarea encontrada por merge_key:", { id: data.id, id_tarea: data.id_tarea });
-    } else {
-      console.log("[SupabaseRevisionRepository] sin fila para merge_key:", mergeKey);
-    }
     return data;
   }
 
@@ -172,11 +165,6 @@ export class SupabaseRevisionRepository implements RevisionRepository {
 
     if (!otherWithIdTarea) {
       patch.id_tarea = v_tid;
-    } else {
-      console.log(
-        "[SupabaseRevisionRepository] id_tarea ya usado en otra fila; se mantiene id_tarea de la fila canónica",
-        { rowId, solicitado: v_tid },
-      );
     }
 
     const { data, error } = await this.supabase
@@ -187,18 +175,15 @@ export class SupabaseRevisionRepository implements RevisionRepository {
       .single();
 
     if (error || !data) {
-      console.error("[SupabaseRevisionRepository] error al actualizar tarea:", error);
       throw new Error(
         formatSupabaseError("Error al actualizar tarea existente", (error ?? { message: "sin fila" }) as PostgrestLikeError),
       );
     }
 
-    console.log("[SupabaseRevisionRepository] tarea actualizada (reutilizada):", data);
     return data as TareaRecord;
   }
 
   async findTareaByExternalId(idTarea: string): Promise<TareaRecord | null> {
-    console.log("[SupabaseRevisionRepository] buscando tarea por id_tarea:", idTarea);
     const { data, error } = await this.supabase
       .from("tareas")
       .select("id, id_tarea")
@@ -206,24 +191,18 @@ export class SupabaseRevisionRepository implements RevisionRepository {
       .maybeSingle();
 
     if (error) {
-      console.error("[SupabaseRevisionRepository] error Supabase (id_tarea):", error);
       throw new Error(formatSupabaseError("Error al buscar tarea por id_tarea", error));
     }
 
-    console.log("[SupabaseRevisionRepository] resultado id_tarea:", data ? { id: data.id } : null);
     return data;
   }
 
   async findTareaByExternalIdOrUrlField(token: string): Promise<TareaRecord | null> {
     const t = token.trim();
-    console.log("[SupabaseRevisionRepository] buscando tarea por id_tarea o url_tarjeta, token:", t);
     if (!t) return null;
 
     const byId = await this.findTareaByExternalId(t);
-    if (byId) {
-      console.log("[SupabaseRevisionRepository] encontrada por id_tarea");
-      return byId;
-    }
+    if (byId) return byId;
 
     const { data, error } = await this.supabase
       .from("tareas")
@@ -234,19 +213,13 @@ export class SupabaseRevisionRepository implements RevisionRepository {
       .maybeSingle();
 
     if (error) {
-      console.error("[SupabaseRevisionRepository] error Supabase (url_tarjeta):", error);
       throw new Error(formatSupabaseError("Error al buscar tarea por url_tarjeta", error));
     }
 
-    console.log("[SupabaseRevisionRepository] resultado url_tarjeta:", data ? { id: data.id } : null);
     return data;
   }
 
   async findTareaByTechnicalIdAndFase(technicalId: string, fase: string): Promise<TareaRecord | null> {
-    console.log("[SupabaseRevisionRepository] buscando por id tecnico en descripcion:", {
-      technicalId,
-      fase,
-    });
     const tid = technicalId.trim();
     if (!tid) return null;
 
@@ -262,24 +235,19 @@ export class SupabaseRevisionRepository implements RevisionRepository {
       .ilike("descripcion", pattern);
 
     if (error) {
-      console.error("[SupabaseRevisionRepository] error Supabase (id tecnico):", error);
       throw new Error(formatSupabaseError("Error al buscar tarea por ID técnico en descripcion", error));
     }
 
     const rows = (data ?? []) as TareaRowForMerge[];
     const matches = rows.filter((row) => normalizeForTareaMerge(row.fase) === keyFase);
 
-    if (matches.length === 0) {
-      console.log("[SupabaseRevisionRepository] id tecnico: sin coincidencias");
-      return null;
-    }
+    if (matches.length === 0) return null;
 
     matches.sort(
       (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
     );
 
     const best = matches[0]!;
-    console.log("[SupabaseRevisionRepository] id tecnico: fila elegida", { id: best.id });
     return { id: best.id, id_tarea: best.id_tarea };
   }
 
@@ -288,7 +256,6 @@ export class SupabaseRevisionRepository implements RevisionRepository {
     fase: string,
     descripcion?: string | null,
   ): Promise<TareaRecord | null> {
-    console.log("[SupabaseRevisionRepository] buscando por titulo/fase normalizados:", { titulo, fase });
     const mergeKeys = new Set<string>();
     if (descripcion?.trim()) {
       mergeKeys.add(buildMergeKeyPreferTech(titulo, fase, descripcion));
@@ -310,7 +277,6 @@ export class SupabaseRevisionRepository implements RevisionRepository {
       .limit(800);
 
     if (error) {
-      console.error("[SupabaseRevisionRepository] error Supabase (titulo/fase):", error);
       throw new Error(formatSupabaseError("Error al buscar tarea por titulo/fase", error));
     }
 
@@ -328,38 +294,22 @@ export class SupabaseRevisionRepository implements RevisionRepository {
       matches = rows.filter(sameFingerprint);
     }
 
-    if (matches.length === 0) {
-      console.log("[SupabaseRevisionRepository] titulo/fase: sin coincidencias");
-      return null;
-    }
+    if (matches.length === 0) return null;
 
     matches.sort(
       (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
     );
 
     const best = matches[0]!;
-    console.log("[SupabaseRevisionRepository] titulo/fase: fila elegida", { id: best.id });
     return { id: best.id, id_tarea: best.id_tarea };
   }
 
-  /**
-   * 1) RPC atómica en BD si existe.
-   * 2) Si no: get-or-create por merge_key (SELECT → UPDATE | INSERT), sin PostgREST `.upsert` en merge_key
-   *    (el índice único parcial + 23505 en carrera se resuelve reconsultando merge_key).
-   */
   async upsertTarea(input: UpsertTareaInput): Promise<TareaRecord> {
     const mergeKey =
       input.mergeKey?.trim() ||
       buildMergeKeyPreferTech(input.titulo, input.fase, input.descripcion);
     const updatedAt = new Date().toISOString();
 
-    console.log("[SupabaseRevisionRepository] upsertTarea merge_key calculado:", mergeKey, {
-      id_tarea: input.id_tarea,
-      titulo: input.titulo,
-      fase: input.fase,
-    });
-
-    console.log("[SupabaseRevisionRepository] intento RPC upsert_tarea_by_merge_key…");
     const { data, error } = await this.supabase.rpc("upsert_tarea_by_merge_key", {
       p_id_tarea: input.id_tarea.trim(),
       p_titulo: input.titulo,
@@ -370,30 +320,16 @@ export class SupabaseRevisionRepository implements RevisionRepository {
       p_updated_at: updatedAt,
     });
 
-    if (error) {
-      console.error("[SupabaseRevisionRepository] RPC upsert_tarea_by_merge_key error:", {
-        message: error.message,
-        code: error.code,
-        details: error.details,
-        hint: error.hint,
-      });
-    } else {
-      console.log("[SupabaseRevisionRepository] RPC respuesta raw:", JSON.stringify(data, null, 2));
-    }
-
     const fromRpc = parseRpcTareaRow(data);
     if (!error && fromRpc) {
-      console.log("[SupabaseRevisionRepository] tarea final (RPC):", fromRpc);
       return fromRpc;
     }
 
     if (!error && !fromRpc) {
-      console.warn("[SupabaseRevisionRepository] RPC sin fila parseable; fallback getOrCreate por merge_key");
       return this.getOrCreateTareaByMergeKeyClient(input, mergeKey, updatedAt);
     }
 
     if (isRpcMissingError(error)) {
-      console.warn("[SupabaseRevisionRepository] RPC no definida (42883); fallback getOrCreate por merge_key");
       return this.getOrCreateTareaByMergeKeyClient(input, mergeKey, updatedAt);
     }
 
@@ -410,24 +346,16 @@ export class SupabaseRevisionRepository implements RevisionRepository {
     mergeKey: string,
     updatedAt: string,
   ): Promise<TareaRecord> {
-    console.log("[SupabaseRevisionRepository] getOrCreateTareaByMergeKeyClient merge_key:", mergeKey);
-
     const byMerge = await this.findTareaByMergeKey(mergeKey);
     if (byMerge) {
-      console.log("[SupabaseRevisionRepository] reutilizando tarea existente (merge_key), aplicando UPDATE");
       return this.updateTareaById(byMerge.id, input, mergeKey, updatedAt);
     }
 
     const byIdTarea = await this.findTareaByExternalId(input.id_tarea.trim());
     if (byIdTarea) {
-      console.log(
-        "[SupabaseRevisionRepository] tarea existente por id_tarea (legado / otro flujo), enlazando merge_key y UPDATE",
-        byIdTarea.id,
-      );
       return this.updateTareaById(byIdTarea.id, input, mergeKey, updatedAt);
     }
 
-    console.log("[SupabaseRevisionRepository] insert nueva fila en tareas (ninguna coincidencia previa)…");
     const { data, error } = await this.supabase
       .from("tareas")
       .insert({
@@ -443,20 +371,13 @@ export class SupabaseRevisionRepository implements RevisionRepository {
       .single();
 
     if (error && isUniqueViolation(error)) {
-      console.warn(
-        "[SupabaseRevisionRepository] conflicto 23505 (unique) en insert tareas; reconsultando por merge_key e id_tarea…",
-        { code: error.code, message: error.message },
-      );
-
       const afterMerge = await this.findTareaByMergeKey(mergeKey);
       if (afterMerge) {
-        console.log("[SupabaseRevisionRepository] tarea final reutilizada tras 23505 (merge_key):", afterMerge.id);
         return this.updateTareaById(afterMerge.id, input, mergeKey, updatedAt);
       }
 
       const afterId = await this.findTareaByExternalId(input.id_tarea.trim());
       if (afterId) {
-        console.log("[SupabaseRevisionRepository] tarea final reutilizada tras 23505 (id_tarea):", afterId.id);
         return this.updateTareaById(afterId.id, input, mergeKey, updatedAt);
       }
 
@@ -469,21 +390,16 @@ export class SupabaseRevisionRepository implements RevisionRepository {
     }
 
     if (error || !data) {
-      console.error("[SupabaseRevisionRepository] insert tareas error:", error);
       throw new Error(
         formatSupabaseError("Error al insertar tarea", (error ?? { message: "sin fila" }) as PostgrestLikeError),
       );
     }
 
-    console.log("[SupabaseRevisionRepository] tarea final (nueva insertada):", data);
     return data as TareaRecord;
   }
 
   async createRevision(input: NewRevisionInput): Promise<void> {
-    console.log("[createRevision] validando input antes de insert…");
     validateRevisionInputForInsert(input);
-
-    console.log("[createRevision] input:", JSON.stringify(input, null, 2));
 
     const { error } = await this.supabase.from("revisiones").insert({
       tarea_id: input.tarea_id,
@@ -500,16 +416,8 @@ export class SupabaseRevisionRepository implements RevisionRepository {
     });
 
     if (error) {
-      console.error("[createRevision] error Supabase insert:", {
-        message: error.message,
-        code: error.code,
-        details: error.details,
-        hint: error.hint,
-      });
       throw new Error(formatSupabaseError("Error al crear revision (insert revisiones)", error));
     }
-
-    console.log("[createRevision] revision insertada correctamente");
   }
 }
 
@@ -517,25 +425,7 @@ export function mapPayloadToRevisionInput(
   payload: RevisionPayload,
   tareaId: string,
 ): NewRevisionInput {
-  console.log("[mapPayloadToRevisionInput] payload recibido:", JSON.stringify(payload, null, 2));
-  console.log("[mapPayloadToRevisionInput] resumen:", {
-    tipo_revision: payload.tipo_revision,
-    tarea_id: tareaId,
-    pr_number: payload.pr_number ?? null,
-    pr_title: payload.pr_title ?? null,
-    repo_owner: payload.repo_owner ?? null,
-    repo_name: payload.repo_name ?? null,
-    tiene_texto_pdf: !!payload.texto_pdf?.trim(),
-    tiene_analisis_documental: !!payload.analisis_documental?.trim(),
-    tiene_codigo_pr: !!payload.codigo_pr?.trim(),
-    tiene_analisis_codigo: !!payload.analisis_codigo?.trim(),
-    len_texto_pdf: payload.texto_pdf?.length ?? 0,
-    len_analisis_documental: payload.analisis_documental?.length ?? 0,
-    len_codigo_pr: payload.codigo_pr?.length ?? 0,
-    len_analisis_codigo: payload.analisis_codigo?.length ?? 0,
-  });
-
-  const input: NewRevisionInput = {
+  return {
     tarea_id: tareaId,
     tipo_revision: payload.tipo_revision,
     texto_pdf: payload.tipo_revision === "documental" ? payload.texto_pdf : payload.texto_pdf,
@@ -550,7 +440,4 @@ export function mapPayloadToRevisionInput(
     codigo_pr: payload.codigo_pr ?? null,
     analisis_codigo: payload.tipo_revision === "codigo" ? payload.analisis_codigo : null,
   };
-
-  console.log("[mapPayloadToRevisionInput] NewRevisionInput resultante:", JSON.stringify(input, null, 2));
-  return input;
 }

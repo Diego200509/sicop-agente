@@ -10,11 +10,7 @@ import type { RevisionPayload } from "@/src/types/revision";
 export async function POST(request: Request) {
   try {
     const rawPayload: unknown = await request.json();
-    console.log("[API /api/revisiones] Payload recibido (raw):", JSON.stringify(rawPayload, null, 2));
-
     const validatedPayload = revisionPayloadSchema.parse(rawPayload);
-    console.log("[API /api/revisiones] Payload validado (zod):", JSON.stringify(validatedPayload, null, 2));
-
     const payload: RevisionPayload =
       validatedPayload.tipo_revision === "documental"
         ? {
@@ -37,8 +33,6 @@ export async function POST(request: Request) {
       { status: 200 },
     );
   } catch (error) {
-    console.error("POST /api/revisiones error:", error);
-
     if (error instanceof ZodError) {
       return NextResponse.json(
         {
