@@ -1,3 +1,4 @@
+import { AppPageShell } from "@/src/components/layout/app-page-shell";
 import { RevisionCard } from "@/src/components/revisiones/revision-card";
 import { FaseBadge } from "@/src/components/tareas/fase-badge";
 import { Badge } from "@/src/components/ui/badge";
@@ -27,9 +28,7 @@ export default async function DashboardPage() {
   const dashboard = await getDashboardData();
 
   return (
-    <section className="mx-auto w-full max-w-6xl space-y-6">
-      <h2 className="text-2xl font-semibold sm:text-3xl">Dashboard</h2>
-
+    <AppPageShell title="Dashboard" className="gap-6">
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="space-y-1">
           <p className="text-sm text-zinc-500">Total tareas</p>
@@ -107,6 +106,6 @@ export default async function DashboardPage() {
           />
         ))}
       </div>
-    </section>
+    </AppPageShell>
   );
 }

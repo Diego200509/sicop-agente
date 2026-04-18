@@ -1,5 +1,6 @@
 "use client";
 
+import { AppPageShell } from "@/src/components/layout/app-page-shell";
 import { TareasBoard } from "@/src/components/tareas/tareas-board";
 import { Card } from "@/src/components/ui/card";
 import { Input } from "@/src/components/ui/input";
@@ -9,12 +10,7 @@ export default function TareasPage() {
   const { tareas, loading, error, search, setSearch } = useTareas();
 
   return (
-    <section className="mx-auto flex w-full max-w-none flex-col gap-4">
-      <div className="shrink-0 space-y-1">
-        <h2 className="text-2xl font-semibold sm:text-3xl">Tareas</h2>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">Vista tablero por fases.</p>
-      </div>
-
+    <AppPageShell title="Tareas" description="Vista tablero por fases.">
       <Card className="shrink-0">
         <Input
           value={search}
@@ -42,6 +38,6 @@ export default function TareasPage() {
       )}
 
       {!loading && !error && tareas.length > 0 && <TareasBoard tareas={tareas} />}
-    </section>
+    </AppPageShell>
   );
 }
