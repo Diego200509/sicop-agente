@@ -20,16 +20,13 @@ export function usePressMotion() {
 type MotionLinkProps = ComponentPropsWithoutRef<typeof Link> & {
   className?: string;
   children: ReactNode;
+  wrapperClassName?: string;
 };
 
-export function MotionLink({ className, children, ...props }: MotionLinkProps) {
+export function MotionLink({ className, children, wrapperClassName, ...props }: MotionLinkProps) {
   const press = usePressMotion();
   return (
-    <motion.span
-      {...press}
-      tabIndex={-1}
-      className="inline-flex"
-    >
+    <motion.span {...press} tabIndex={-1} className={cn("inline-flex", wrapperClassName)}>
       <Link {...props} className={className}>
         {children}
       </Link>
