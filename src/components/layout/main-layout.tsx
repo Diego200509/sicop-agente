@@ -12,7 +12,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   const pathname = usePathname();
 
   return (
-    <AppShell key={pathname} currentPath={pathname}>
+    <AppShell currentPath={pathname}>
       {children}
     </AppShell>
   );

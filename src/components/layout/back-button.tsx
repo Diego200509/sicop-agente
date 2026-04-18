@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+import { MotionButton, MotionLink } from "@/src/components/ui/motion-press";
 import { cn } from "@/src/lib/utils";
 
 type BackButtonProps = {
@@ -28,10 +28,10 @@ export function BackButton({
   }
 
   return (
-    <Link href={href} className={buttonClasses(variant, className)} aria-label={label}>
+    <MotionLink href={href} className={buttonClasses(variant, className)} aria-label={label}>
       <ArrowLeftIcon className="size-4 shrink-0" />
       <span>{label}</span>
-    </Link>
+    </MotionLink>
   );
 }
 
@@ -44,7 +44,7 @@ function BackButtonHistory({
   const router = useRouter();
 
   return (
-    <button
+    <MotionButton
       type="button"
       onClick={() => {
         try {
@@ -62,7 +62,7 @@ function BackButtonHistory({
     >
       <ArrowLeftIcon className="size-4 shrink-0" />
       <span>{label}</span>
-    </button>
+    </MotionButton>
   );
 }
 

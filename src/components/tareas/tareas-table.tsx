@@ -1,8 +1,7 @@
-import Link from "next/link";
-
 import { EstadoBadge } from "@/src/components/tareas/estado-badge";
 import { FaseBadge } from "@/src/components/tareas/fase-badge";
 import { Card } from "@/src/components/ui/card";
+import { MotionLink } from "@/src/components/ui/motion-press";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/src/components/ui/table";
 
 export type TareaTablaItem = {
@@ -65,9 +64,12 @@ export function TareasTable({ tareas }: TareasTableProps) {
                   : "Sin revisiones"}
               </TableCell>
               <TableCell className="text-right">
-                <Link href={`/tareas/${tarea.id}`} className="text-sm font-medium text-blue-600 hover:underline">
+                <MotionLink
+                  href={`/tareas/${tarea.id}`}
+                  className="text-sm font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
+                >
                   Ver detalle
-                </Link>
+                </MotionLink>
               </TableCell>
             </TableRow>
           ))}

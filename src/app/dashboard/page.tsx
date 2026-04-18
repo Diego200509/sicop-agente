@@ -1,10 +1,9 @@
-import Link from "next/link";
-
 import { RevisionCard } from "@/src/components/revisiones/revision-card";
 import { FaseBadge } from "@/src/components/tareas/fase-badge";
 import { Badge } from "@/src/components/ui/badge";
 import { Card } from "@/src/components/ui/card";
 import { FormattedDate } from "@/src/components/ui/formatted-date";
+import { MotionLink } from "@/src/components/ui/motion-press";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/src/components/ui/table";
 import { getSupabaseClient } from "@/src/lib/supabase/client";
 import { TareaRepository } from "@/src/repositories/tarea.repository";
@@ -76,12 +75,12 @@ export default async function DashboardPage() {
                   </TableCell>
                   <TableCell className="text-right">
                     {revision.tarea_uuid ? (
-                      <Link
+                      <MotionLink
                         href={`/tareas/${encodeURIComponent(revision.tarea_uuid)}`}
                         className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
                       >
                         Ver detalle
-                      </Link>
+                      </MotionLink>
                     ) : (
                       "—"
                     )}

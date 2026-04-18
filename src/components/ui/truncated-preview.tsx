@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
-
 import { AnalysisMarkdown } from "@/src/components/documentos/analysis-markdown";
+import { MotionLink } from "@/src/components/ui/motion-press";
 import { cn } from "@/src/lib/utils";
 
 const LINE_CLAMP: Record<3 | 4 | 5 | 6, string> = {
@@ -61,7 +60,7 @@ export function TruncatedPreview({
           {displayPlain}
         </p>
       )}
-      <Link
+      <MotionLink
         href={moreHref}
         className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 transition-colors hover:text-blue-500 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
       >
@@ -69,7 +68,7 @@ export function TruncatedPreview({
         <span aria-hidden className="text-xs">
           →
         </span>
-      </Link>
+      </MotionLink>
     </div>
   );
 }

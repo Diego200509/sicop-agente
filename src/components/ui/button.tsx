@@ -1,6 +1,10 @@
+"use client";
+
+import { motion } from "framer-motion";
 import * as React from "react";
 
 import { cn } from "@/src/lib/utils";
+import { usePressMotion } from "@/src/components/ui/motion-press";
 
 type ButtonVariant = "default" | "ghost";
 
@@ -12,10 +16,30 @@ const variantStyles: Record<ButtonVariant, string> = {
   ghost: "hover:bg-zinc-100 dark:hover:bg-zinc-800",
 };
 
-export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+export interface ButtonProps
+  extends Omit<
+    React.ButtonHTMLAttributes<HTMLButtonElement>,
+    | "onDrag"
+    | "onDragStart"
+    | "onDragEnd"
+    | "onAnimationStart"
+    | "onAnimationEnd"
+    | "onAnimationIteration"
+  > {
   variant?: ButtonVariant;
 }
 
 export function Button({ className, variant = "default", ...props }: ButtonProps) {
-  return <button className={cn(baseStyles, variantStyles[variant], className)} {...props} />;
+  const press = usePressMotion();
+  const { disabled, tabIndex, ...rest } = props;
+  const resolvedTabIndex = tabIndex ?? (disabled ? -1 : 0);
+  return (
+    <motion.button
+      {...press}
+      tabIndex={resolvedTabIndex}
+      disabled={disabled}
+      className={cn(baseStyles, variantStyles[variant], className)}
+      {...rest}
+    />
+  );
 }

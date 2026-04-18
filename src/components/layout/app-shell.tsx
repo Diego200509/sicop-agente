@@ -1,17 +1,49 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import {
+  AnimatePresence,
+  motion,
+  useReducedMotion,
+  type Transition,
+} from "framer-motion";
+import { ChevronLeft } from "lucide-react";
+import { useEffect, useLayoutEffect, useState } from "react";
 
 import { SidebarNav } from "@/src/components/layout/sidebar-nav";
+import { MotionButton } from "@/src/components/ui/motion-press";
 import { cn } from "@/src/lib/utils";
+
+const SIDEBAR_COLLAPSED_KEY = "sicop-sidebar-collapsed";
 
 type AppShellProps = {
   children: React.ReactNode;
   currentPath?: string;
 };
 
+const SIDEBAR_W_EXPANDED = 256;
+const SIDEBAR_W_COLLAPSED = 72;
+
 export function AppShell({ children, currentPath }: AppShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const reduceMotion = useReducedMotion();
+
+  const sidebarTransition =
+    reduceMotion === true
+      ? { duration: 0.05 }
+      : { type: "spring" as const, stiffness: 380, damping: 38, mass: 0.72 };
+
+  const brandTransition = reduceMotion === true ? { duration: 0.05 } : { duration: 0.22, ease: [0.22, 1, 0.36, 1] as const };
+
+  useLayoutEffect(() => {
+    try {
+      if (localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1") {
+        setSidebarCollapsed(true);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   useEffect(() => {
     if (!mobileOpen) return;
@@ -22,21 +54,89 @@ export function AppShell({ children, currentPath }: AppShellProps) {
     return () => window.removeEventListener("keydown", onKey);
   }, [mobileOpen]);
 
+  const toggleSidebar = () => {
+    setSidebarCollapsed((c) => {
+      const next = !c;
+      try {
+        localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
+
   return (
     <div className="flex h-dvh min-h-0 overflow-hidden bg-zinc-50 dark:bg-zinc-950">
       {/* Desktop sidebar */}
-      <aside
+      <motion.aside
         aria-label="Navegacion principal"
-        className="hidden h-dvh w-64 shrink-0 overflow-y-auto border-r border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 lg:flex lg:flex-col"
+        initial={false}
+        animate={{
+          width: sidebarCollapsed ? SIDEBAR_W_COLLAPSED : SIDEBAR_W_EXPANDED,
+          paddingLeft: sidebarCollapsed ? 8 : 16,
+          paddingRight: sidebarCollapsed ? 8 : 16,
+          paddingTop: 16,
+          paddingBottom: 16,
+        }}
+        transition={sidebarTransition}
+        className={cn(
+          "hidden h-dvh shrink-0 overflow-y-auto overflow-x-hidden border-r border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 lg:flex lg:flex-col",
+        )}
       >
-        <Brand />
-        <SidebarNav currentPath={currentPath} className="mt-6" />
-      </aside>
+        <Brand collapsed={sidebarCollapsed} transition={brandTransition} />
+        <SidebarNav
+          id="desktop-sidebar-nav"
+          currentPath={currentPath}
+          collapsed={sidebarCollapsed}
+          className="mt-6 flex-1"
+        />
+        <div className={cn("mt-4 shrink-0", sidebarCollapsed ? "flex justify-center" : "")}>
+          <motion.button
+            type="button"
+            tabIndex={0}
+            layout
+            onClick={toggleSidebar}
+            aria-expanded={!sidebarCollapsed}
+            aria-controls="desktop-sidebar-nav"
+            title={sidebarCollapsed ? "Expandir menu" : "Contraer menu"}
+            whileTap={{ scale: reduceMotion ? 1 : 0.97 }}
+            transition={{ type: "spring", stiffness: 500, damping: 38 }}
+            className={cn(
+              "inline-flex items-center justify-center overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50 text-zinc-700 shadow-sm hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800/80 dark:text-zinc-200 dark:hover:bg-zinc-800",
+              sidebarCollapsed ? "size-10" : "h-10 min-w-0 w-full gap-2 px-3",
+            )}
+          >
+            <motion.span
+              animate={{ rotate: sidebarCollapsed ? 180 : 0 }}
+              transition={reduceMotion === true ? { duration: 0 } : { type: "spring", stiffness: 420, damping: 32 }}
+              className="inline-flex shrink-0"
+            >
+              <ChevronLeft className="size-5" aria-hidden />
+            </motion.span>
+            <motion.span
+              animate={{
+                opacity: sidebarCollapsed ? 0 : 1,
+                maxWidth: sidebarCollapsed ? 0 : 120,
+              }}
+              transition={
+                reduceMotion === true
+                  ? { duration: 0 }
+                  : { duration: 0.22, ease: [0.22, 1, 0.36, 1] }
+              }
+              className="overflow-hidden whitespace-nowrap text-xs font-medium"
+              aria-hidden={sidebarCollapsed}
+            >
+              Contraer
+            </motion.span>
+          </motion.button>
+        </div>
+      </motion.aside>
 
       {/* Mobile header */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <header className="sticky top-0 z-40 flex items-center gap-3 border-b border-zinc-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95 lg:hidden">
-          <button
+          <MotionButton
             type="button"
             onClick={() => setMobileOpen(true)}
             className="inline-flex size-10 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-900 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
@@ -45,7 +145,7 @@ export function AppShell({ children, currentPath }: AppShellProps) {
             aria-label="Abrir menu"
           >
             <MenuIcon className="size-5" />
-          </button>
+          </MotionButton>
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">SICOP Agente</p>
             <p className="truncate text-xs text-zinc-500">Revisiones</p>
@@ -72,15 +172,15 @@ export function AppShell({ children, currentPath }: AppShellProps) {
           )}
         >
           <div className="mb-6 flex items-center justify-between gap-2">
-            <Brand />
-            <button
+            <Brand transition={brandTransition} />
+            <MotionButton
               type="button"
               onClick={() => setMobileOpen(false)}
               className="inline-flex size-9 items-center justify-center rounded-lg text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
               aria-label="Cerrar menu"
             >
               <CloseIcon className="size-5" />
-            </button>
+            </MotionButton>
           </div>
           <SidebarNav currentPath={currentPath} onNavigate={() => setMobileOpen(false)} />
         </aside>
@@ -93,11 +193,41 @@ export function AppShell({ children, currentPath }: AppShellProps) {
   );
 }
 
-function Brand() {
+function Brand({ collapsed, transition }: { collapsed?: boolean; transition: Transition }) {
   return (
-    <div>
-      <h1 className="text-lg font-semibold">SICOP Agente</h1>
-      <p className="text-sm text-zinc-500">Revisiones</p>
+    <div className="relative min-h-[3.25rem]">
+      <AnimatePresence mode="wait" initial={false}>
+        {collapsed ? (
+          <motion.div
+            key="brand-compact"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            transition={transition}
+            className="flex justify-center"
+          >
+            <div
+              className="flex size-10 select-none items-center justify-center rounded-lg bg-gradient-to-br from-zinc-800 to-zinc-900 text-[10px] font-bold leading-tight text-white shadow-sm dark:from-zinc-200 dark:to-zinc-100 dark:text-zinc-900"
+              title="SICOP Agente"
+              aria-hidden
+            >
+              SA
+            </div>
+            <span className="sr-only">SICOP Agente, Revisiones</span>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="brand-full"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={transition}
+          >
+            <h1 className="text-lg font-semibold">SICOP Agente</h1>
+            <p className="text-sm text-zinc-500">Revisiones</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

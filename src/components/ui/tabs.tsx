@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { motion, useReducedMotion } from "framer-motion";
 
 import { cn } from "@/src/lib/utils";
 
@@ -39,7 +40,15 @@ export function TabsList({ className, ...props }: React.HTMLAttributes<HTMLDivEl
   );
 }
 
-type TabsTriggerProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
+type TabsTriggerProps = Omit<
+  React.ButtonHTMLAttributes<HTMLButtonElement>,
+  | "onDrag"
+  | "onDragStart"
+  | "onDragEnd"
+  | "onAnimationStart"
+  | "onAnimationEnd"
+  | "onAnimationIteration"
+> & {
   value: string;
 };
 
@@ -48,20 +57,39 @@ export function TabsTrigger({ className, value, ...props }: TabsTriggerProps) {
   if (!context) return null;
 
   const isActive = context.value === value;
+  const reduceMotion = useReducedMotion();
+  const { disabled, tabIndex, children, ...rest } = props;
+  const resolvedTabIndex = tabIndex ?? (disabled ? -1 : 0);
 
   return (
-    <button
+    <motion.button
       type="button"
       className={cn(
-        "inline-flex items-center justify-center rounded px-3 py-1.5 text-sm font-medium transition-colors",
-        isActive
-          ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-900 dark:text-zinc-100"
-          : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100",
+        "relative inline-flex items-center justify-center rounded px-3 py-1.5 text-sm font-medium",
+        "transition-[color] duration-200 ease-out",
+        isActive ? "text-zinc-900 dark:text-zinc-100" : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100",
         className,
       )}
+      whileTap={reduceMotion ? undefined : { scale: 0.98 }}
+      tabIndex={resolvedTabIndex}
+      disabled={disabled}
       onClick={() => context.setValue(value)}
-      {...props}
-    />
+      {...rest}
+    >
+      {isActive ? (
+        <motion.span
+          layoutId="sicop-tabs-indicator"
+          className="absolute inset-0 rounded bg-white shadow-sm dark:bg-zinc-900"
+          transition={
+            reduceMotion
+              ? { duration: 0 }
+              : { type: "spring", stiffness: 520, damping: 42, mass: 0.7 }
+          }
+          aria-hidden
+        />
+      ) : null}
+      <span className="relative z-10">{children}</span>
+    </motion.button>
   );
 }
 
