@@ -9,6 +9,8 @@ import { PdfTextViewer } from "@/src/components/documentos/pdf-text-viewer";
 import { BackButton } from "@/src/components/layout/back-button";
 import { EstadoBadge } from "@/src/components/tareas/estado-badge";
 import { FaseBadge } from "@/src/components/tareas/fase-badge";
+import { CodigoPrViewer } from "@/src/components/tareas/codigo-pr-viewer";
+import { TareaDescripcion } from "@/src/components/tareas/tarea-descripcion";
 import { Card } from "@/src/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/src/components/ui/tabs";
 import { useTareaDetalle } from "@/src/hooks/use-tarea-detalle";
@@ -69,17 +71,23 @@ export default function TareaDetallePage({ params }: TareaDetallePageProps) {
               <span>Fase:</span>
               <FaseBadge fase={detalle.fase} />
             </div>
-            <p className="text-sm text-zinc-700 dark:text-zinc-200">{detalle.descripcion}</p>
-            <p className="text-sm">
-              URL tarjeta:{" "}
+            <TareaDescripcion text={detalle.descripcion} />
+            <div className="border-t border-zinc-200 pt-3 text-sm dark:border-zinc-700">
+              <span className="font-medium text-zinc-600 dark:text-zinc-300">URL tarjeta</span>
+              <span className="mx-2 text-zinc-400">·</span>
               {detalle.url_tarjeta ? (
-                <a href={detalle.url_tarjeta} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                <a
+                  href={detalle.url_tarjeta}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="break-all text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
+                >
                   {detalle.url_tarjeta}
                 </a>
               ) : (
-                "Sin URL"
+                <span className="text-zinc-500 dark:text-zinc-400">Sin URL</span>
               )}
-            </p>
+            </div>
             <div className="flex flex-wrap gap-2">
               <EstadoBadge
                 estado={detalle.estado_documental}
@@ -133,10 +141,8 @@ export default function TareaDetallePage({ params }: TareaDetallePageProps) {
                 Repo: <span className="font-medium">{repo || "Sin repositorio registrado"}</span>
               </p>
               <div className="space-y-2">
-                <p className="text-sm font-medium">Codigo PR</p>
-                <p className="rounded-md bg-zinc-50 p-3 text-sm text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
-                  {detalle.codigo.codigo_pr ?? "Sin codigo PR registrado"}
-                </p>
+                <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Codigo PR</p>
+                <CodigoPrViewer value={detalle.codigo.codigo_pr} />
               </div>
               <div className="space-y-2">
                 <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Analisis codigo</p>
