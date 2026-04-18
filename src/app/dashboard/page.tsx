@@ -75,9 +75,9 @@ export default async function DashboardPage() {
                     <FormattedDate value={revision.fecha_revision} />
                   </TableCell>
                   <TableCell className="text-right">
-                    {revision.id_tarea ? (
+                    {revision.tarea_uuid ? (
                       <Link
-                        href={`/tareas/${encodeURIComponent(revision.id_tarea)}`}
+                        href={`/tareas/${encodeURIComponent(revision.tarea_uuid)}`}
                         className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
                       >
                         Ver detalle
@@ -103,7 +103,7 @@ export default async function DashboardPage() {
             fecha={revision.fecha_revision}
             descripcion={revision.descripcion || "Sin analisis registrado"}
             detalleHref={
-              revision.id_tarea ? `/tareas/${encodeURIComponent(revision.id_tarea)}` : undefined
+              revision.tarea_uuid ? `/tareas/${encodeURIComponent(revision.tarea_uuid)}` : undefined
             }
           />
         ))}

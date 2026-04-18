@@ -6,6 +6,7 @@ import { Card } from "@/src/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/src/components/ui/table";
 
 export type TareaTablaItem = {
+  id: string;
   id_tarea: string;
   titulo: string;
   fase: string;
@@ -35,7 +36,7 @@ export function TareasTable({ tareas }: TareasTableProps) {
         </TableHeader>
         <TableBody>
           {tareas.map((tarea) => (
-            <TableRow key={tarea.id_tarea}>
+            <TableRow key={tarea.id}>
               <TableCell className="font-medium">{tarea.titulo}</TableCell>
               <TableCell>
                 <FaseBadge fase={tarea.fase} />
@@ -64,7 +65,7 @@ export function TareasTable({ tareas }: TareasTableProps) {
                   : "Sin revisiones"}
               </TableCell>
               <TableCell className="text-right">
-                <Link href={`/tareas/${tarea.id_tarea}`} className="text-sm font-medium text-blue-600 hover:underline">
+                <Link href={`/tareas/${tarea.id}`} className="text-sm font-medium text-blue-600 hover:underline">
                   Ver detalle
                 </Link>
               </TableCell>

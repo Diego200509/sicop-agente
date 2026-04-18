@@ -93,7 +93,7 @@ export default function TareaDetallePage({ params }: TareaDetallePageProps) {
               ) : null}
             </div>
 
-            {codeApplies ? <ConclusionCard idTarea={detalle.id_tarea} /> : null}
+            {codeApplies ? <ConclusionCard idTarea={detalle.id} /> : null}
           </Card>
         </TabsContent>
 

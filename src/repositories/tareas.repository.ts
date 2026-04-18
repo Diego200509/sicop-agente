@@ -19,9 +19,41 @@ export class TareasRepository {
   }
 
   async getIdByExternalId(idTarea: string): Promise<string | null> {
-    const { data, error } = await this.supabase.from("tareas").select("id").eq("id_tarea", idTarea).maybeSingle();
+    const p = idTarea.trim();
+    if (p.includes("|||")) {
+      const { data, error } = await this.supabase.from("tareas").select("id").eq("merge_key", p).maybeSingle();
+      if (error) throw new Error(`Error resolviendo tarea: ${error.message}`);
+      if (data?.id) return data.id as string;
+    }
+
+    const { data, error } = await this.supabase.from("tareas").select("id").eq("id_tarea", p).maybeSingle();
 
     if (error) throw new Error(`Error resolviendo tarea: ${error.message}`);
+    return (data?.id as string | undefined) ?? null;
+  }
+
+  /**
+   * Resuelve UUID interno: id, id_tarea del último webhook, o merge_key literal (`ds1|||desarrollo`).
+   * La identidad estable entre flujos n8n es merge_key; id_tarea puede cambiar entre documental y código.
+   */
+  async resolveTareaUuid(idOrExternal: string): Promise<string | null> {
+    const p = idOrExternal.trim();
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(p);
+
+    if (isUuid) {
+      const { data, error } = await this.supabase.from("tareas").select("id").eq("id", p).maybeSingle();
+      if (error) throw new Error(`Error resolviendo tarea: ${error.message}`);
+      if (data?.id) return data.id as string;
+    }
+
+    if (p.includes("|||")) {
+      const { data, error } = await this.supabase.from("tareas").select("id").eq("merge_key", p).maybeSingle();
+      if (error) throw new Error(`Error resolviendo tarea: ${error.message}`);
+      if (data?.id) return data.id as string;
+    }
+
+    const { data, error: err2 } = await this.supabase.from("tareas").select("id").eq("id_tarea", p).maybeSingle();
+    if (err2) throw new Error(`Error resolviendo tarea: ${err2.message}`);
     return (data?.id as string | undefined) ?? null;
   }
 

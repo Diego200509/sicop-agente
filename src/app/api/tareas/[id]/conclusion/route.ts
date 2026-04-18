@@ -11,12 +11,12 @@ type RouteParams = {
 
 export async function POST(_: Request, { params }: RouteParams) {
   try {
-    const { id: idTarea } = await params;
+    const { id: idParam } = await params;
     const supabase = getSupabaseClient();
     const tareasRepo = new TareasRepository(supabase);
     const revisionesRepo = new RevisionesRepository(supabase);
 
-    const uuid = await tareasRepo.getIdByExternalId(idTarea);
+    const uuid = await tareasRepo.resolveTareaUuid(idParam);
     if (!uuid) {
       return NextResponse.json({ error: "Tarea no encontrada" }, { status: 404 });
     }

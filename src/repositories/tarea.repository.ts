@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { requiresCodeReviewByPhase } from "@/src/lib/fases";
 
 export type TareaListado = {
+  id: string;
   id_tarea: string;
   titulo: string;
   fase: string;
@@ -39,6 +40,7 @@ export type DashboardData = {
   total_revisiones_codigo: number;
   ultimas_revisiones: Array<{
     id: string;
+    tarea_uuid: string;
     id_tarea: string;
     tipo_revision: "documental" | "codigo";
     fecha_revision: string | null;
@@ -71,13 +73,17 @@ type TareaJoinRow = {
   revisiones: RevisionRow[] | null;
 };
 
+function isUuidParam(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value.trim());
+}
+
 export class TareaRepository {
   constructor(private readonly supabase: SupabaseClient) {}
 
   async listTareas(search?: string): Promise<TareaListado[]> {
     let query = this.supabase
       .from("tareas")
-      .select("id_tarea,titulo,fase,revisiones(tipo_revision,fecha_revision)")
+      .select("id,id_tarea,titulo,fase,revisiones(tipo_revision,fecha_revision)")
       .order("created_at", { ascending: false });
 
     if (search) query = query.ilike("titulo", `%${search}%`);
@@ -86,6 +92,7 @@ export class TareaRepository {
     if (error) throw new Error(`Error listando tareas: ${error.message}`);
 
     const rows = (data ?? []) as Array<{
+      id: string;
       id_tarea: string;
       titulo: string;
       fase: string;
@@ -103,6 +110,7 @@ export class TareaRepository {
         .sort((a, b) => new Date(b as string).getTime() - new Date(a as string).getTime())[0];
 
       return {
+        id: row.id,
         id_tarea: row.id_tarea,
         titulo: row.titulo,
         fase: row.fase,
@@ -113,16 +121,31 @@ export class TareaRepository {
     });
   }
 
-  async getTareaDetail(idTarea: string): Promise<TareaDetalle | null> {
-    const { data, error } = await this.supabase
-      .from("tareas")
-      .select(
-        "id,id_tarea,titulo,fase,descripcion,url_tarjeta,revisiones(id,tipo_revision,fecha_revision,texto_pdf,analisis_documental,pr_title,repo_owner,repo_name,codigo_pr,analisis_codigo)",
-      )
-      .eq("id_tarea", idTarea)
-      .maybeSingle();
+  async getTareaDetail(idOrIdTarea: string): Promise<TareaDetalle | null> {
+    const select =
+      "id,id_tarea,titulo,fase,descripcion,url_tarjeta,revisiones(id,tipo_revision,fecha_revision,texto_pdf,analisis_documental,pr_title,repo_owner,repo_name,codigo_pr,analisis_codigo)";
 
-    if (error) throw new Error(`Error obteniendo detalle de tarea: ${error.message}`);
+    const param = idOrIdTarea.trim();
+
+    const fetchRow = async (column: "id" | "id_tarea") => {
+      const { data, error } = await this.supabase.from("tareas").select(select).eq(column, param).maybeSingle();
+      if (error) throw new Error(`Error obteniendo detalle de tarea: ${error.message}`);
+      return data as TareaJoinRow | null;
+    };
+
+    let data: TareaJoinRow | null = null;
+    if (isUuidParam(param)) {
+      data = await fetchRow("id");
+    }
+    if (!data) {
+      data = await fetchRow("id_tarea");
+    }
+    if (!data && param.includes("|||")) {
+      const { data: byMerge, error } = await this.supabase.from("tareas").select(select).eq("merge_key", param).maybeSingle();
+      if (error) throw new Error(`Error obteniendo detalle de tarea: ${error.message}`);
+      data = byMerge as TareaJoinRow | null;
+    }
+
     if (!data) return null;
 
     const tarea = data as TareaJoinRow;
@@ -162,7 +185,7 @@ export class TareaRepository {
       this.supabase.from("revisiones").select("tipo_revision"),
       this.supabase
         .from("revisiones")
-        .select("id,tipo_revision,fecha_revision,analisis_documental,analisis_codigo,tareas(id_tarea,titulo,fase)")
+        .select("id,tipo_revision,fecha_revision,analisis_documental,analisis_codigo,tareas(id,id_tarea,titulo,fase)")
         .order("fecha_revision", { ascending: false })
         .limit(8),
     ]);
@@ -185,8 +208,8 @@ export class TareaRepository {
         analisis_documental: string | null;
         analisis_codigo: string | null;
         tareas:
-          | { id_tarea: string; titulo: string; fase: string }
-          | Array<{ id_tarea: string; titulo: string; fase: string }>
+          | { id: string; id_tarea: string; titulo: string; fase: string }
+          | Array<{ id: string; id_tarea: string; titulo: string; fase: string }>
           | null;
       };
 
@@ -194,6 +217,7 @@ export class TareaRepository {
 
       return {
         id: row.id,
+        tarea_uuid: tareaJoin?.id ?? "",
         id_tarea: tareaJoin?.id_tarea ?? "",
         tipo_revision: row.tipo_revision,
         fecha_revision: row.fecha_revision,

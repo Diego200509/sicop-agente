@@ -1,3 +1,6 @@
+-- Instalación mínima. Para unificación documental/código (merge_key + RPC + trigger),
+-- ejecuta además: src/lib/supabase/migration_fix_tareas_merge_key_unificado.sql
+
 create extension if not exists "pgcrypto";
 
 create table if not exists public.tareas (
@@ -7,6 +10,8 @@ create table if not exists public.tareas (
   fase text not null,
   descripcion text not null,
   url_tarjeta text,
+  /** Dedupe documental/código: misma tarjeta lógica aunque n8n envíe distintos id_tarea (ver tarea-match-key). */
+  merge_key text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
 
@@ -55,6 +60,10 @@ create table if not exists public.revisiones (
 
 create index if not exists idx_tareas_id_tarea
   on public.tareas(id_tarea);
+
+create unique index if not exists tareas_merge_key_unique
+  on public.tareas(merge_key)
+  where merge_key is not null;
 
 create index if not exists idx_revisiones_tarea_id
   on public.revisiones(tarea_id);

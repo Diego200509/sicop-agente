@@ -10,7 +10,11 @@ import type { RevisionPayload } from "@/src/types/revision";
 export async function POST(request: Request) {
   try {
     const rawPayload: unknown = await request.json();
+    console.log("[API /api/revisiones] Payload recibido (raw):", JSON.stringify(rawPayload, null, 2));
+
     const validatedPayload = revisionPayloadSchema.parse(rawPayload);
+    console.log("[API /api/revisiones] Payload validado (zod):", JSON.stringify(validatedPayload, null, 2));
+
     const payload: RevisionPayload =
       validatedPayload.tipo_revision === "documental"
         ? {
@@ -33,7 +37,7 @@ export async function POST(request: Request) {
       { status: 200 },
     );
   } catch (error) {
-    console.error("Error procesando /api/revisiones:", error);
+    console.error("POST /api/revisiones error:", error);
 
     if (error instanceof ZodError) {
       return NextResponse.json(
@@ -50,6 +54,9 @@ export async function POST(request: Request) {
       {
         ok: false,
         error: "Error interno al procesar revision",
+        detail: error instanceof Error ? error.message : String(error),
+        stack:
+          process.env.NODE_ENV !== "production" && error instanceof Error ? error.stack : undefined,
       },
       { status: 500 },
     );
