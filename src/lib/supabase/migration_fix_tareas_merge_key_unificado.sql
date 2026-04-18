@@ -170,6 +170,55 @@ create unique index if not exists tareas_merge_key_unique
   where merge_key is not null;
 
 -- -----------------------------------------------------------------------------
+-- 9b) url_tarjeta: misma regla que src/lib/url-tarjeta.ts (no pisar URL http(s) con id corto)
+-- -----------------------------------------------------------------------------
+create or replace function public.tareas_is_http_url(p text)
+returns boolean
+language sql
+immutable
+as $$
+  select
+    length(btrim(coalesce(p, ''))) > 0
+    and btrim(p) ~* '^https?://';
+$$;
+
+create or replace function public.tareas_choose_best_url_tarjeta(p_current text, p_incoming text)
+returns text
+language plpgsql
+immutable
+as $$
+declare
+  c text := btrim(coalesce(p_current, ''));
+  i text := btrim(coalesce(p_incoming, ''));
+  cur_ok boolean;
+  inc_ok boolean;
+begin
+  cur_ok := public.tareas_is_http_url(c);
+  inc_ok := public.tareas_is_http_url(i);
+
+  if cur_ok and not inc_ok then
+    return nullif(c, '');
+  end if;
+  if inc_ok and not cur_ok then
+    return nullif(i, '');
+  end if;
+  if cur_ok and inc_ok then
+    return nullif(c, '');
+  end if;
+  if length(c) > 0 then
+    return c;
+  end if;
+  if length(i) > 0 then
+    return i;
+  end if;
+  return null;
+end;
+$$;
+
+comment on function public.tareas_choose_best_url_tarjeta(text, text) is
+  'Fusiona url_tarjeta existente vs payload n8n; alineado con chooseBestUrlTarjeta (Node).';
+
+-- -----------------------------------------------------------------------------
 -- 10) RPC: upsert atómico por merge_key (carreras entre webhooks n8n)
 --      Orden: bloqueo advisory → por merge_key → legado por id_tarea → INSERT … ON CONFLICT
 -- -----------------------------------------------------------------------------
@@ -189,12 +238,12 @@ returns table (
 language plpgsql
 security definer
 set search_path = public
-as $rpc$
+as $UpsertTareaByMergeKeyBody$
 declare
   v_merge text;
   v_tid text;
-  rid uuid;
-  kid uuid;
+  v_rid uuid;
+  v_kid uuid;
   v_url text;
 begin
   v_tid := nullif(trim(p_id_tarea), '');
@@ -213,19 +262,19 @@ begin
 
   -- A) Ya existe la tarea lógica
   select t.id
-  into rid
+  into v_rid
   from public.tareas t
   where t.merge_key = v_merge
   order by t.updated_at desc nulls last, t.created_at desc
   limit 1;
 
-  if rid is not null then
+  if v_rid is not null then
     update public.tareas t
     set
       titulo = p_titulo,
       fase = p_fase,
       descripcion = p_descripcion,
-      url_tarjeta = coalesce(v_url, t.url_tarjeta),
+      url_tarjeta = public.tareas_choose_best_url_tarjeta(t.url_tarjeta, v_url),
       updated_at = coalesce(p_updated_at, now()),
       id_tarea = case
         when not exists (
@@ -233,33 +282,33 @@ begin
         ) then v_tid
         else t.id_tarea
       end
-    where t.id = rid;
+    where t.id = v_rid;
 
     return query
-    select t.id, t.id_tarea from public.tareas t where t.id = rid;
+    select t.id, t.id_tarea from public.tareas t where t.id = v_rid;
     return;
   end if;
 
   -- B) Legado: fila por id_tarea de un flujo (merge_key distinto o null)
-  select t.id into rid from public.tareas t where t.id_tarea = v_tid limit 1;
+  select t.id into v_rid from public.tareas t where t.id_tarea = v_tid limit 1;
 
-  if rid is not null then
-    select k.id into kid
+  if v_rid is not null then
+    select k.id into v_kid
     from public.tareas k
-    where k.merge_key = v_merge and k.id <> rid
+    where k.merge_key = v_merge and k.id <> v_rid
     order by k.updated_at desc nulls last, k.created_at desc
     limit 1;
 
-    if kid is not null then
-      update public.revisiones r set tarea_id = kid where r.tarea_id = rid;
-      delete from public.tareas where id = rid;
+    if v_kid is not null then
+      update public.revisiones r set tarea_id = v_kid where r.tarea_id = v_rid;
+      delete from public.tareas where id = v_rid;
 
       update public.tareas t
       set
         titulo = p_titulo,
         fase = p_fase,
         descripcion = p_descripcion,
-        url_tarjeta = coalesce(v_url, t.url_tarjeta),
+        url_tarjeta = public.tareas_choose_best_url_tarjeta(t.url_tarjeta, v_url),
         updated_at = coalesce(p_updated_at, now()),
         id_tarea = case
           when not exists (
@@ -267,9 +316,9 @@ begin
           ) then v_tid
           else t.id_tarea
         end
-      where t.id = kid;
+      where t.id = v_kid;
 
-      return query select t.id, t.id_tarea from public.tareas t where t.id = kid;
+      return query select t.id, t.id_tarea from public.tareas t where t.id = v_kid;
       return;
     end if;
 
@@ -279,24 +328,32 @@ begin
       titulo = p_titulo,
       fase = p_fase,
       descripcion = p_descripcion,
-      url_tarjeta = coalesce(v_url, t.url_tarjeta),
+      url_tarjeta = public.tareas_choose_best_url_tarjeta(t.url_tarjeta, v_url),
       updated_at = coalesce(p_updated_at, now())
-    where t.id = rid;
+    where t.id = v_rid;
 
-    return query select t.id, t.id_tarea from public.tareas t where t.id = rid;
+    return query select t.id, t.id_tarea from public.tareas t where t.id = v_rid;
     return;
   end if;
 
   -- C) Alta nueva + carrera entre dos inserts con el mismo merge_key
   return query
     insert into public.tareas (id_tarea, titulo, fase, descripcion, url_tarjeta, merge_key, updated_at)
-    values (v_tid, p_titulo, p_fase, p_descripcion, v_url, v_merge, coalesce(p_updated_at, now()))
+    values (
+      v_tid,
+      p_titulo,
+      p_fase,
+      p_descripcion,
+      public.tareas_choose_best_url_tarjeta(null::text, v_url),
+      v_merge,
+      coalesce(p_updated_at, now())
+    )
     on conflict (merge_key) where merge_key is not null
     do update set
       titulo = excluded.titulo,
       fase = excluded.fase,
       descripcion = excluded.descripcion,
-      url_tarjeta = coalesce(excluded.url_tarjeta, tareas.url_tarjeta),
+      url_tarjeta = public.tareas_choose_best_url_tarjeta(tareas.url_tarjeta, excluded.url_tarjeta),
       updated_at = excluded.updated_at,
       id_tarea = case
         when not exists (
@@ -308,10 +365,10 @@ begin
 
   return;
 end;
-$rpc$;
+$UpsertTareaByMergeKeyBody$;
 
 comment on function public.upsert_tarea_by_merge_key(text, text, text, text, text, text, timestamptz) is
-  'Unificación robusta: advisory lock + merge_key; respeta id_tarea único al actualizar.';
+  'Unificación robusta: advisory lock + merge_key; id_tarea único; url_tarjeta vía tareas_choose_best_url_tarjeta.';
 
 -- Permisos (API con anon key / service role según tu configuración)
 grant execute on function public.upsert_tarea_by_merge_key(text, text, text, text, text, text, timestamptz) to anon;

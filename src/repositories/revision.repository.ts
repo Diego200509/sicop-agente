@@ -64,23 +64,10 @@ export interface RevisionRepository {
   createRevision(input: NewRevisionInput): Promise<void>;
 }
 
-function isRpcMissingError(error: { code?: string; message?: string } | null): boolean {
-  return error?.code === "42883";
-}
-
 function isUniqueViolation(error: { code?: string; message?: string } | null): boolean {
   if (!error) return false;
   if (error.code === "23505") return true;
   return error.message?.toLowerCase().includes("duplicate key") ?? false;
-}
-
-function parseRpcTareaRow(data: unknown): TareaRecord | null {
-  if (data == null) return null;
-  const row = Array.isArray(data) ? data[0] : data;
-  if (row && typeof row === "object" && "id" in row && "id_tarea" in row) {
-    return { id: String((row as { id: unknown }).id), id_tarea: String((row as { id_tarea: unknown }).id_tarea) };
-  }
-  return null;
 }
 
 function formatSupabaseError(context: string, error: PostgrestLikeError): string {
@@ -318,42 +305,25 @@ export class SupabaseRevisionRepository implements RevisionRepository {
     return { id: best.id, id_tarea: best.id_tarea };
   }
 
+  /**
+   * Unificación de tareas **solo por Node/PostgREST** (sin RPC).
+   *
+   * La RPC `public.upsert_tarea_by_merge_key` puede seguir existiendo en Supabase, pero **no se invoca**
+   * desde esta app: evita divergencias con el SQL Editor y mantiene una única fuente de verdad en TypeScript
+   * (`merge_key`, búsquedas, 23505, `chooseBestUrlTarjeta` en `updateTareaById` / insert).
+   */
   async upsertTarea(input: UpsertTareaInput): Promise<TareaRecord> {
     const mergeKey =
       input.mergeKey?.trim() ||
       buildMergeKeyPreferTech(input.titulo, input.fase, input.descripcion);
     const updatedAt = new Date().toISOString();
 
-    const { data, error } = await this.supabase.rpc("upsert_tarea_by_merge_key", {
-      p_id_tarea: input.id_tarea.trim(),
-      p_titulo: input.titulo,
-      p_fase: input.fase,
-      p_descripcion: input.descripcion,
-      p_url_tarjeta: input.url_tarjeta ?? null,
-      p_merge_key: mergeKey,
-      p_updated_at: updatedAt,
-    });
-
-    const fromRpc = parseRpcTareaRow(data);
-    if (!error && fromRpc) {
-      return fromRpc;
-    }
-
-    if (!error && !fromRpc) {
-      return this.getOrCreateTareaByMergeKeyClient(input, mergeKey, updatedAt);
-    }
-
-    if (isRpcMissingError(error)) {
-      return this.getOrCreateTareaByMergeKeyClient(input, mergeKey, updatedAt);
-    }
-
-    throw new Error(
-      formatSupabaseError("Error al upsert tarea (RPC)", error as PostgrestLikeError),
-    );
+    return this.getOrCreateTareaByMergeKeyClient(input, mergeKey, updatedAt);
   }
 
   /**
-   * Sin depender de `.upsert(onConflict: merge_key)` sobre índice parcial (evita INSERT duplicado → 23505).
+   * Camino único de upsert de tarea: merge_key → update / id_tarea → update / insert → 23505 → reconsultar.
+   * Sin `.upsert(onConflict: merge_key)` sobre índice parcial (evita INSERT duplicado → 23505).
    */
   private async getOrCreateTareaByMergeKeyClient(
     input: UpsertTareaInput,
@@ -377,7 +347,7 @@ export class SupabaseRevisionRepository implements RevisionRepository {
         titulo: input.titulo,
         fase: input.fase,
         descripcion: input.descripcion,
-        url_tarjeta: input.url_tarjeta?.trim() ? input.url_tarjeta : null,
+        url_tarjeta: chooseBestUrlTarjeta(null, input.url_tarjeta),
         merge_key: mergeKey,
         updated_at: updatedAt,
       })
