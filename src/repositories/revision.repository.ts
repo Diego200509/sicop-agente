@@ -6,6 +6,7 @@ import {
   fingerprintTituloFase,
   normalizeForTareaMerge,
 } from "@/src/lib/tarea-match-key";
+import { chooseBestUrlTarjeta } from "@/src/lib/url-tarjeta";
 import type { RevisionPayload } from "@/src/types/revision";
 
 type TareaRecord = {
@@ -147,6 +148,16 @@ export class SupabaseRevisionRepository implements RevisionRepository {
   ): Promise<TareaRecord> {
     const v_tid = input.id_tarea.trim();
 
+    const { data: rowBefore, error: beforeErr } = await this.supabase
+      .from("tareas")
+      .select("url_tarjeta")
+      .eq("id", rowId)
+      .maybeSingle();
+
+    if (beforeErr) {
+      throw new Error(formatSupabaseError("Error al leer url_tarjeta actual", beforeErr));
+    }
+
     const { data: otherWithIdTarea } = await this.supabase
       .from("tareas")
       .select("id")
@@ -160,7 +171,10 @@ export class SupabaseRevisionRepository implements RevisionRepository {
       descripcion: input.descripcion,
       merge_key: mergeKey,
       updated_at: updatedAt,
-      url_tarjeta: input.url_tarjeta?.trim() ? input.url_tarjeta : null,
+      url_tarjeta: chooseBestUrlTarjeta(
+        rowBefore?.url_tarjeta as string | null | undefined,
+        input.url_tarjeta,
+      ),
     };
 
     if (!otherWithIdTarea) {

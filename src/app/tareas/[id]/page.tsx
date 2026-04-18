@@ -139,10 +139,11 @@ export default function TareaDetallePage({ params }: TareaDetallePageProps) {
                 </p>
               </div>
               <div className="space-y-2">
-                <p className="text-sm font-medium">Analisis codigo</p>
-                <p className="rounded-md bg-zinc-50 p-3 text-sm text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
-                  {detalle.codigo.analisis_codigo ?? "Sin analisis de codigo registrado"}
-                </p>
+                <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Analisis codigo</p>
+                <AnalysisViewer
+                  value={detalle.codigo.analisis_codigo}
+                  emptyLabel="Sin analisis de codigo registrado"
+                />
               </div>
             </Card>
           </TabsContent>
