@@ -40,7 +40,7 @@ export default function TareaDetallePage({ params }: TareaDetallePageProps) {
 
   if (loading) {
     return (
-      <AppPageShell maxWidth="2xl" className="gap-4">
+      <AppPageShell className="gap-4">
         <BackButton href="/tareas" label="Volver a tareas" />
         <Card>
           <p className="text-sm text-zinc-500">Cargando detalle...</p>
@@ -51,7 +51,7 @@ export default function TareaDetallePage({ params }: TareaDetallePageProps) {
 
   if (error || !detalle) {
     return (
-      <AppPageShell maxWidth="2xl" className="gap-4">
+      <AppPageShell className="gap-4">
         <BackButton href="/tareas" label="Volver a tareas" />
         <Card className="overflow-hidden">
           <EmptyState
@@ -72,7 +72,7 @@ export default function TareaDetallePage({ params }: TareaDetallePageProps) {
   const codeApplies = requiresCodeReviewByPhase(detalle.fase);
 
   return (
-    <AppPageShell maxWidth="2xl" fillHeight className="gap-4 overflow-hidden">
+    <AppPageShell fillHeight className="gap-4 overflow-hidden">
       <div className="flex shrink-0 flex-col gap-3">
         <BackButton href="/tareas" label="Volver a tareas" />
         <h2 className="text-2xl font-semibold sm:text-3xl">Detalle de tarea</h2>
