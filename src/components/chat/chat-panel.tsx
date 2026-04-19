@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertCircle, MessageSquare } from "lucide-react";
@@ -17,6 +17,11 @@ import { cn } from "@/src/lib/utils";
 import type { ChatMessage } from "@/src/types/chat";
 
 const NEAR_BOTTOM_PX = 140;
+
+/** Una línea cómoda (text-sm + padding vertical del compositor). */
+const CHAT_COMPOSER_MIN_HEIGHT_PX = 46;
+/** ~5–6 líneas visibles antes de activar scroll interno. */
+const CHAT_COMPOSER_MAX_HEIGHT_PX = 156;
 
 function SendArrowIcon({ className }: { className?: string }) {
   return (
@@ -70,7 +75,22 @@ export function ChatPanel({ tareaId = null, title = "Asistente SICOP", className
   const [error, setError] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  const inputWrapRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const syncComposerHeight = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.overflowY = "hidden";
+    const sh = el.scrollHeight;
+    const next = Math.max(CHAT_COMPOSER_MIN_HEIGHT_PX, Math.min(sh, CHAT_COMPOSER_MAX_HEIGHT_PX));
+    el.style.height = `${next}px`;
+    el.style.overflowY = sh > CHAT_COMPOSER_MAX_HEIGHT_PX ? "auto" : "hidden";
+  }, []);
+
+  useLayoutEffect(() => {
+    syncComposerHeight();
+  }, [input, loadingHistory, syncComposerHeight]);
 
   const loadHistory = useCallback(async () => {
     setLoadingHistory(true);
@@ -102,13 +122,13 @@ export function ChatPanel({ tareaId = null, title = "Asistente SICOP", className
   }, [loadingHistory, tareaId]);
 
   const focusInput = useCallback(() => {
-    const ta = inputWrapRef.current?.querySelector("textarea");
-    if (ta instanceof HTMLTextAreaElement) {
-      ta.focus();
-      const len = ta.value.length;
-      ta.setSelectionRange(len, len);
-    }
-  }, []);
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.focus();
+    const len = ta.value.length;
+    ta.setSelectionRange(len, len);
+    requestAnimationFrame(() => syncComposerHeight());
+  }, [syncComposerHeight]);
 
   const sendWithText = useCallback(
     async (rawText: string) => {
@@ -432,10 +452,14 @@ export function ChatPanel({ tareaId = null, title = "Asistente SICOP", className
       )}
 
       <div
-        ref={inputWrapRef}
-        className="flex shrink-0 items-end gap-1.5 rounded-2xl border border-zinc-200 bg-zinc-100/90 p-1.5 pl-2.5 dark:border-zinc-700 dark:bg-zinc-900/60"
+        className={cn(
+          "flex shrink-0 items-end gap-2 rounded-2xl border border-zinc-200/90 bg-zinc-50/95 p-2 pl-3 shadow-sm ring-1 ring-zinc-900/[0.03] dark:border-zinc-700/90 dark:bg-zinc-900/55 dark:ring-white/[0.04]",
+          "transition-[box-shadow,border-color] duration-200 ease-out",
+          "focus-within:border-zinc-300 focus-within:shadow-md focus-within:ring-zinc-900/[0.06] dark:focus-within:border-zinc-600 dark:focus-within:ring-white/[0.06]",
+        )}
       >
         <Textarea
+          ref={textareaRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Escribe tu pregunta…"
@@ -448,10 +472,15 @@ export function ChatPanel({ tareaId = null, title = "Asistente SICOP", className
             }
           }}
           className={cn(
-            "!min-h-[40px] !max-h-[120px] !resize-none flex-1 overflow-y-auto scrollbar-elegant border-0 bg-transparent py-2.5 pl-0 text-sm leading-snug",
-            "shadow-none outline-none ring-0 placeholder:text-zinc-500 dark:bg-transparent",
-            "!focus-visible:ring-0 focus-visible:ring-offset-0",
+            "!min-h-0 max-h-none flex-1 resize-none border-0 bg-transparent py-3 pr-1 text-sm leading-relaxed",
+            "shadow-none outline-none ring-0 placeholder:text-zinc-500/85 dark:bg-transparent dark:placeholder:text-zinc-500",
+            "focus-visible:ring-0 focus-visible:ring-offset-0",
+            "scrollbar-elegant",
           )}
+          style={{
+            minHeight: CHAT_COMPOSER_MIN_HEIGHT_PX,
+            maxHeight: CHAT_COMPOSER_MAX_HEIGHT_PX,
+          }}
         />
         <Button
           type="button"
@@ -459,7 +488,7 @@ export function ChatPanel({ tareaId = null, title = "Asistente SICOP", className
           onClick={() => void send()}
           aria-label="Enviar mensaje"
           aria-busy={inFlight}
-          className="size-9 shrink-0 rounded-xl p-0 sm:size-9"
+          className="size-9 shrink-0 rounded-xl p-0 sm:size-10"
         >
           {inFlight ? (
             <span className="inline-flex size-5 items-center justify-center">
