@@ -16,8 +16,6 @@ type RevisionCardProps = {
 };
 
 export function RevisionCard({ tipo, titulo, fase, fecha, descripcion, detalleHref, previewLines = 4 }: RevisionCardProps) {
-  const previewFormat = tipo === "documental" ? "markdown" : "plain";
-
   return (
     <Card className="space-y-2">
       <div className="flex items-start justify-between gap-3">
@@ -35,16 +33,12 @@ export function RevisionCard({ tipo, titulo, fase, fecha, descripcion, detalleHr
           text={descripcion}
           moreHref={detalleHref}
           lines={previewLines}
-          format={previewFormat}
+          format="markdown"
         />
-      ) : previewFormat === "markdown" ? (
-        descripcion.trim() ? (
-          <AnalysisMarkdown source={descripcion} compact className="text-sm" />
-        ) : (
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">—</p>
-        )
+      ) : descripcion.trim() ? (
+        <AnalysisMarkdown source={descripcion} compact className="text-sm" />
       ) : (
-        <p className="whitespace-pre-wrap break-words text-sm text-zinc-700 dark:text-zinc-300">{descripcion}</p>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">—</p>
       )}
     </Card>
   );
