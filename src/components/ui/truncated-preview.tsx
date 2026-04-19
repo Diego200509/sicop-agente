@@ -1,7 +1,7 @@
 "use client";
 
 import { AnalysisMarkdown } from "@/src/components/documentos/analysis-markdown";
-import { MotionLink } from "@/src/components/ui/motion-press";
+import { LinkPill } from "@/src/components/ui/link-pill";
 import { cn } from "@/src/lib/utils";
 
 const LINE_CLAMP: Record<3 | 4 | 5 | 6, string> = {
@@ -17,6 +17,8 @@ type TruncatedPreviewProps = {
   moreHref: string;
   lines?: 3 | 4 | 5 | 6;
   moreLabel?: string;
+  /** Estilo del enlace “Ver más” (usa `LinkPill`). Por defecto acento suave para destacar en tarjetas. */
+  moreLinkVariant?: "default" | "emphasized";
   className?: string;
   format?: "plain" | "markdown";
 };
@@ -26,6 +28,7 @@ export function TruncatedPreview({
   moreHref,
   lines = 4,
   moreLabel = "Ver más",
+  moreLinkVariant = "emphasized",
   className,
   format = "plain",
 }: TruncatedPreviewProps) {
@@ -52,15 +55,11 @@ export function TruncatedPreview({
           {displayPlain}
         </p>
       )}
-      <MotionLink
-        href={moreHref}
-        className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 transition-colors hover:text-blue-500 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
-      >
-        {moreLabel}
-        <span aria-hidden className="text-xs">
-          →
-        </span>
-      </MotionLink>
+      <div className="pt-0.5">
+        <LinkPill href={moreHref} size="md" variant={moreLinkVariant}>
+          {moreLabel}
+        </LinkPill>
+      </div>
     </div>
   );
 }

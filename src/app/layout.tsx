@@ -17,6 +17,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "SICOP Agente",
   description: "Agente de apoyo para revisiones documentales y de codigo en el proyecto SICOP",
+  icons: {
+    icon: [{ url: "/sidebar-brand-collapsed.png", type: "image/png" }],
+    apple: [{ url: "/sidebar-brand-collapsed.png", type: "image/png" }],
+  },
 };
 
 export default function RootLayout({

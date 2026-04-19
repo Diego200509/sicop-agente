@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { MessageSquare } from "lucide-react";
 
+import { AnalysisMarkdown } from "@/src/components/documentos/analysis-markdown";
 import { Button } from "@/src/components/ui/button";
 import { Card } from "@/src/components/ui/card";
 import { EmptyState } from "@/src/components/ui/empty-state";
@@ -137,7 +138,13 @@ export function ChatPanel({ tareaId = null, title = "Asistente SICOP", className
                   : "border border-zinc-200 bg-white text-zinc-900 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100",
               )}
             >
-              <p className="whitespace-pre-wrap break-words">{m.mensaje}</p>
+              {m.rol === "user" ? (
+                <p className="whitespace-pre-wrap break-words">{m.mensaje}</p>
+              ) : (
+                <div className="min-w-0 break-words">
+                  <AnalysisMarkdown source={m.mensaje} compact className="[&_a]:break-all" />
+                </div>
+              )}
               <p className="mt-1 text-[10px] opacity-60">
                 {new Date(m.created_at).toLocaleString("es-ES")}
               </p>

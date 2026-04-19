@@ -1,7 +1,17 @@
 "use client";
 
 import { use } from "react";
-import { CircleAlert } from "lucide-react";
+import {
+  Braces,
+  CircleAlert,
+  Code2,
+  FileSearch,
+  FileText,
+  FolderGit2,
+  GitPullRequest,
+  Layers,
+  Link2,
+} from "lucide-react";
 
 import { ChatPanel } from "@/src/components/chat/chat-panel";
 import { ConclusionCard } from "@/src/components/chat/conclusion-card";
@@ -14,6 +24,7 @@ import { FaseBadge } from "@/src/components/tareas/fase-badge";
 import { CodigoPrViewer } from "@/src/components/tareas/codigo-pr-viewer";
 import { TareaDescripcion } from "@/src/components/tareas/tarea-descripcion";
 import { Card } from "@/src/components/ui/card";
+import { DetailBlock, DetailBlockRow } from "@/src/components/ui/detail-block";
 import { EmptyState } from "@/src/components/ui/empty-state";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/src/components/ui/tabs";
 import { useTareaDetalle } from "@/src/hooks/use-tarea-detalle";
@@ -71,35 +82,44 @@ export default function TareaDetallePage({ params }: TareaDetallePageProps) {
         <TabsList className="shrink-0">
           <TabsTrigger value="resumen">Resumen</TabsTrigger>
           <TabsTrigger value="documental">Documental</TabsTrigger>
-          {codeApplies ? <TabsTrigger value="codigo">Codigo</TabsTrigger> : null}
+          {codeApplies ? <TabsTrigger value="codigo">Código</TabsTrigger> : null}
           <TabsTrigger value="chat">Chat</TabsTrigger>
         </TabsList>
 
         <TabsContent value="resumen" className="mt-0 min-h-0 flex-1 overflow-y-auto">
-          <Card className="space-y-3">
-            <h3 className="text-xl font-semibold">{detalle.titulo}</h3>
-            <div className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
-              <span>Fase:</span>
+          <Card className="space-y-5">
+            <h3 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{detalle.titulo}</h3>
+            <DetailBlockRow
+              icon={Layers}
+              title="Fase en el tablero"
+              hint="Etapa del proyecto a la que pertenece esta tarea."
+              tone="violet"
+            >
               <FaseBadge fase={detalle.fase} />
-            </div>
+            </DetailBlockRow>
             <TareaDescripcion text={detalle.descripcion} />
-            <div className="border-t border-zinc-200 pt-3 text-sm dark:border-zinc-700">
-              <span className="font-medium text-zinc-600 dark:text-zinc-300">URL tarjeta</span>
-              <span className="mx-2 text-zinc-400">·</span>
-              {detalle.url_tarjeta ? (
-                <a
-                  href={detalle.url_tarjeta}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="break-all text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
-                >
-                  {detalle.url_tarjeta}
-                </a>
-              ) : (
-                <span className="text-zinc-500 dark:text-zinc-400">Sin URL</span>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-2">
+            <DetailBlock
+              icon={Link2}
+              title="Enlace de la tarjeta"
+              hint="Abre el tablero externo en una nueva pestaña."
+              tone="emerald"
+            >
+              <div className="rounded-lg border border-zinc-200/90 bg-white px-3 py-2.5 text-sm shadow-sm dark:border-zinc-700/90 dark:bg-zinc-950/60">
+                {detalle.url_tarjeta ? (
+                  <a
+                    href={detalle.url_tarjeta}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="break-all font-medium text-sky-700 underline-offset-2 hover:underline dark:text-sky-400"
+                  >
+                    {detalle.url_tarjeta}
+                  </a>
+                ) : (
+                  <span className="text-zinc-500 dark:text-zinc-400">Sin URL registrada.</span>
+                )}
+              </div>
+            </DetailBlock>
+            <div className="flex flex-wrap gap-2 border-t border-zinc-200 pt-4 dark:border-zinc-700">
               <EstadoBadge
                 estado={detalle.estado_documental}
                 etiqueta={`Documental: ${detalle.estado_documental === "completo" ? "Completo" : "Pendiente"}`}
@@ -107,7 +127,7 @@ export default function TareaDetallePage({ params }: TareaDetallePageProps) {
               {codeApplies ? (
                 <EstadoBadge
                   estado={detalle.estado_codigo}
-                  etiqueta={`Codigo: ${detalle.estado_codigo === "completo" ? "Completo" : "Pendiente"}`}
+                  etiqueta={`Código: ${detalle.estado_codigo === "completo" ? "Completo" : "Pendiente"}`}
                 />
               ) : null}
             </div>
@@ -117,16 +137,29 @@ export default function TareaDetallePage({ params }: TareaDetallePageProps) {
         </TabsContent>
 
         <TabsContent value="documental" className="mt-0 min-h-0 flex-1 overflow-y-auto">
-          <div className="space-y-6">
-            <h3 className="text-lg font-semibold">Revision documental</h3>
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Texto PDF</p>
+          <div className="space-y-8">
+            <div>
+              <h3 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Revisión documental</h3>
+              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                Material extraído del PDF y el análisis generado para esta tarea.
+              </p>
+            </div>
+            <DetailBlock
+              icon={FileText}
+              title="Texto del PDF"
+              hint="Contenido de texto asociado al documento de la tarjeta."
+              tone="amber"
+            >
               <PdfTextViewer value={detalle.documental.texto_pdf} />
-            </div>
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Analisis documental</p>
+            </DetailBlock>
+            <DetailBlock
+              icon={FileSearch}
+              title="Análisis documental"
+              hint="Observaciones, riesgos y conclusiones del agente sobre el documento."
+              tone="sky"
+            >
               <AnalysisViewer value={detalle.documental.analisis_documental} />
-            </div>
+            </DetailBlock>
           </div>
         </TabsContent>
 
@@ -143,25 +176,56 @@ export default function TareaDetallePage({ params }: TareaDetallePageProps) {
 
         {codeApplies ? (
           <TabsContent value="codigo" className="mt-0 min-h-0 flex-1 overflow-y-auto">
-            <Card className="space-y-3">
-              <h3 className="text-lg font-semibold">Revision de codigo</h3>
-              <p className="text-sm">
-                PR: <span className="font-medium">{detalle.codigo.pr_title ?? "Sin PR registrado"}</span>
-              </p>
-              <p className="text-sm">
-                Repo: <span className="font-medium">{repo || "Sin repositorio registrado"}</span>
-              </p>
-              <div className="space-y-2">
-                <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Codigo PR</p>
-                <CodigoPrViewer value={detalle.codigo.codigo_pr} />
+            <Card className="space-y-8">
+              <div>
+                <h3 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Revisión de código</h3>
+                <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                  Pull request, diff y análisis automático del cambio en el repositorio.
+                </p>
               </div>
-              <div className="space-y-2">
-                <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Analisis codigo</p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <DetailBlock
+                  icon={GitPullRequest}
+                  title="Pull request"
+                  hint="Título del PR enlazado a esta tarea."
+                  tone="rose"
+                  dense
+                >
+                  <p className="rounded-lg border border-zinc-200/90 bg-white px-3 py-2 text-sm font-medium text-zinc-900 shadow-sm dark:border-zinc-700/90 dark:bg-zinc-950/60 dark:text-zinc-100">
+                    {detalle.codigo.pr_title ?? "Sin PR registrado"}
+                  </p>
+                </DetailBlock>
+                <DetailBlock
+                  icon={FolderGit2}
+                  title="Repositorio"
+                  hint="Dueño y nombre del repo en GitHub."
+                  tone="zinc"
+                  dense
+                >
+                  <p className="rounded-lg border border-zinc-200/90 bg-white px-3 py-2 font-mono text-sm font-medium text-zinc-900 shadow-sm dark:border-zinc-700/90 dark:bg-zinc-950/60 dark:text-zinc-100">
+                    {repo || "Sin repositorio registrado"}
+                  </p>
+                </DetailBlock>
+              </div>
+              <DetailBlock
+                icon={Code2}
+                title="Diff del PR"
+                hint="Fragmentos de código o diff tal como se registraron en la revisión."
+                tone="violet"
+              >
+                <CodigoPrViewer value={detalle.codigo.codigo_pr} />
+              </DetailBlock>
+              <DetailBlock
+                icon={Braces}
+                title="Análisis de código"
+                hint="Comentarios del agente sobre calidad, riesgos y alineación con la tarea."
+                tone="sky"
+              >
                 <AnalysisViewer
                   value={detalle.codigo.analisis_codigo}
-                  emptyLabel="Sin analisis de codigo registrado"
+                  emptyLabel="Sin análisis de código registrado"
                 />
-              </div>
+              </DetailBlock>
             </Card>
           </TabsContent>
         ) : null}

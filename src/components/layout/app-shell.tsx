@@ -7,6 +7,7 @@ import {
   type Transition,
 } from "framer-motion";
 import { ChevronLeft } from "lucide-react";
+import Image from "next/image";
 import { useEffect, useLayoutEffect, useState } from "react";
 
 import { SidebarNav } from "@/src/components/layout/sidebar-nav";
@@ -22,6 +23,8 @@ type AppShellProps = {
 
 const SIDEBAR_W_EXPANDED = 256;
 const SIDEBAR_W_COLLAPSED = 72;
+
+const SIDEBAR_COLLAPSED_LOGO = "/sidebar-brand-collapsed.png";
 
 export function AppShell({ children, currentPath }: AppShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -207,11 +210,17 @@ function Brand({ collapsed, transition }: { collapsed?: boolean; transition: Tra
             className="flex justify-center"
           >
             <div
-              className="flex size-10 select-none items-center justify-center rounded-lg bg-gradient-to-br from-zinc-800 to-zinc-900 text-[10px] font-bold leading-tight text-white shadow-sm dark:from-zinc-200 dark:to-zinc-100 dark:text-zinc-900"
+              className="relative flex size-10 shrink-0 select-none items-center justify-center overflow-hidden rounded-lg bg-zinc-100 shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-800 dark:ring-zinc-600"
               title="SICOP Agente"
-              aria-hidden
             >
-              SA
+              <Image
+                src={SIDEBAR_COLLAPSED_LOGO}
+                alt=""
+                width={40}
+                height={40}
+                className="object-contain p-1"
+                priority
+              />
             </div>
             <span className="sr-only">SICOP Agente, Revisiones</span>
           </motion.div>
