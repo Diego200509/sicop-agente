@@ -1,6 +1,7 @@
 "use client";
 
 import { use } from "react";
+import { CircleAlert } from "lucide-react";
 
 import { ChatPanel } from "@/src/components/chat/chat-panel";
 import { ConclusionCard } from "@/src/components/chat/conclusion-card";
@@ -12,6 +13,7 @@ import { FaseBadge } from "@/src/components/tareas/fase-badge";
 import { CodigoPrViewer } from "@/src/components/tareas/codigo-pr-viewer";
 import { TareaDescripcion } from "@/src/components/tareas/tarea-descripcion";
 import { Card } from "@/src/components/ui/card";
+import { EmptyState } from "@/src/components/ui/empty-state";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/src/components/ui/tabs";
 import { useTareaDetalle } from "@/src/hooks/use-tarea-detalle";
 import { requiresCodeReviewByPhase } from "@/src/lib/fases";
@@ -39,8 +41,16 @@ export default function TareaDetallePage({ params }: TareaDetallePageProps) {
     return (
       <section className="mx-auto w-full max-w-6xl space-y-4">
         <BackButton href="/tareas" label="Volver a tareas" />
-        <Card>
-          <p className="text-sm text-rose-600">{error ?? "No se encontro la tarea solicitada"}</p>
+        <Card className="overflow-hidden">
+          <EmptyState
+            tone="error"
+            icon={CircleAlert}
+            title="No se pudo cargar la tarea"
+            description={
+              error ??
+              "No se encontró la tarea solicitada o ocurrió un error al obtener el detalle. Vuelve al listado e inténtalo de nuevo."
+            }
+          />
         </Card>
       </section>
     );

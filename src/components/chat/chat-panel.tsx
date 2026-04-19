@@ -2,8 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { MessageSquare } from "lucide-react";
+
 import { Button } from "@/src/components/ui/button";
 import { Card } from "@/src/components/ui/card";
+import { EmptyState } from "@/src/components/ui/empty-state";
 import { Textarea } from "@/src/components/ui/textarea";
 import { cn } from "@/src/lib/utils";
 import type { ChatMessage } from "@/src/types/chat";
@@ -110,9 +113,12 @@ export function ChatPanel({ tareaId = null, title = "Asistente SICOP", className
         {loadingHistory && <p className="text-sm text-zinc-500">Cargando historial...</p>}
 
         {!loadingHistory && messages.length === 0 && (
-          <p className="text-sm text-zinc-500">
-            Aun no hay mensajes. Escribe una pregunta para comenzar.
-          </p>
+          <EmptyState
+            compact
+            icon={MessageSquare}
+            title="Aún no hay mensajes"
+            description="Escribe una pregunta en el campo de abajo para comenzar a conversar con el asistente."
+          />
         )}
 
         {messages.map((m) => (

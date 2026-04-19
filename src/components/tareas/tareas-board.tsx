@@ -1,6 +1,7 @@
-import { CalendarClock } from "lucide-react";
+import { CalendarClock, ClipboardList } from "lucide-react";
 
 import { EstadoBadge } from "@/src/components/tareas/estado-badge";
+import { EmptyState } from "@/src/components/ui/empty-state";
 import { MotionLink } from "@/src/components/ui/motion-press";
 import { cn } from "@/src/lib/utils";
 import { FASES_TABLERO, normalizePhase } from "@/src/lib/fases";
@@ -138,7 +139,12 @@ export function TareasBoard({ tareas }: TareasBoardProps) {
             </header>
             <div className="scrollbar-elegant flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2 [&>*]:w-full">
               {col.tareas.length === 0 ? (
-                <p className="px-1 py-6 text-center text-xs text-zinc-500 dark:text-zinc-500">Sin tareas</p>
+                <EmptyState
+                  compact
+                  icon={ClipboardList}
+                  title="Sin tareas"
+                  description="Ninguna tarea en esta fase por ahora."
+                />
               ) : (
                 col.tareas.map((t) => <TareaCard key={t.id} tarea={t} />)
               )}
