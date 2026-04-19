@@ -7,17 +7,20 @@ import {
   KeyboardSensor,
   PointerSensor,
   TouchSensor,
+  useDndMonitor,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { CalendarClock, ClipboardList, GripVertical } from "lucide-react";
-import { useCallback, useMemo } from "react";
+import { motion } from "framer-motion";
+import { CalendarClock, ClipboardList } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useCallback, useMemo, useRef } from "react";
 
 import { EstadoBadge } from "@/src/components/tareas/estado-badge";
 import { EmptyState } from "@/src/components/ui/empty-state";
-import { MotionLink } from "@/src/components/ui/motion-press";
+import { MotionLink, usePressMotion } from "@/src/components/ui/motion-press";
 import { cn } from "@/src/lib/utils";
 import { FASES_TABLERO, normalizePhase } from "@/src/lib/fases";
 import {
@@ -147,6 +150,29 @@ function StaticTareaCard({ tarea }: { tarea: TareaTablaItem }) {
 }
 
 function SortableTareaCard({ tarea }: { tarea: TareaTablaItem }) {
+  const router = useRouter();
+  const press = usePressMotion();
+  const skipClickAfterDragRef = useRef(false);
+  const skipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const markSkipNextClick = useCallback(() => {
+    if (skipTimerRef.current) clearTimeout(skipTimerRef.current);
+    skipClickAfterDragRef.current = true;
+    skipTimerRef.current = setTimeout(() => {
+      skipClickAfterDragRef.current = false;
+      skipTimerRef.current = null;
+    }, 120);
+  }, []);
+
+  useDndMonitor({
+    onDragEnd({ active }) {
+      if (String(active.id) === tarea.id) markSkipNextClick();
+    },
+    onDragCancel({ active }) {
+      if (String(active.id) === tarea.id) markSkipNextClick();
+    },
+  });
+
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: tarea.id });
 
   const style = {
@@ -164,70 +190,72 @@ function SortableTareaCard({ tarea }: { tarea: TareaTablaItem }) {
       })
     : null;
 
+  const openDetalle = useCallback(() => {
+    router.push(`/tareas/${tarea.id}`);
+  }, [router, tarea.id]);
+
   return (
     <div
       ref={setNodeRef}
       style={style}
       className={cn(
-        "flex w-full min-w-0 gap-1.5 rounded-lg border border-zinc-200/80 bg-white p-2 shadow-sm dark:border-zinc-700/90 dark:bg-zinc-900/80",
-        isDragging && "z-10 opacity-90 ring-2 ring-zinc-400/50 dark:ring-zinc-500/50",
+        "w-full min-w-0 select-none rounded-lg border border-zinc-200/80 bg-white p-3 text-left shadow-sm outline-none",
+        "transition-colors hover:border-zinc-300 hover:bg-zinc-50",
+        "dark:border-zinc-700/90 dark:bg-zinc-900/80 dark:hover:border-zinc-600 dark:hover:bg-zinc-800/80",
+        "cursor-pointer focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-2 dark:focus-visible:ring-zinc-500 dark:focus-visible:ring-offset-zinc-950",
+        isDragging && "z-10 cursor-grabbing opacity-90 ring-2 ring-zinc-400/50 dark:ring-zinc-500/50",
       )}
+      {...attributes}
+      {...listeners}
+      title="Clic para abrir la tarea; mantén pulsado un momento para moverla en la columna"
+      aria-label="Clic para abrir la tarea; mantén pulsado para reordenar en la columna"
+      onClick={() => {
+        if (skipClickAfterDragRef.current) {
+          skipClickAfterDragRef.current = false;
+          return;
+        }
+        openDetalle();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          openDetalle();
+        }
+      }}
     >
-      <button
-        type="button"
-        className={cn(
-          "mt-0.5 flex size-8 shrink-0 cursor-grab touch-none items-center justify-center rounded-md border border-transparent",
-          "text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 active:cursor-grabbing",
-          "dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300",
-        )}
-        aria-label="Arrastrar para reordenar"
-        {...attributes}
-        {...listeners}
-      >
-        <GripVertical className="size-4" aria-hidden />
-      </button>
-      <div className="min-w-0 flex-1 py-0.5">
-        <MotionLink
-          href={`/tareas/${tarea.id}`}
-          wrapperClassName="block w-full min-w-0"
-          className={cn(
-            "block w-full min-w-0 rounded-md text-left transition-colors",
-            "hover:bg-zinc-50 dark:hover:bg-zinc-800/60",
-          )}
-        >
-          <p className="line-clamp-3 text-sm font-medium leading-snug text-zinc-900 dark:text-zinc-100">{tarea.titulo}</p>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            <EstadoBadge
-              estado={tarea.estado_documental}
-              etiqueta={tarea.estado_documental === "completo" ? "Doc" : "Doc pend."}
-            />
-            <EstadoBadge
-              estado={tarea.estado_codigo}
-              etiqueta={
-                tarea.estado_codigo === "completo"
-                  ? "Código"
-                  : tarea.estado_codigo === "no_aplica"
-                    ? "Cód. n/a"
-                    : "Cód pend."
-              }
-            />
+      <motion.span {...press} tabIndex={-1} className="block w-full min-w-0">
+        <p className="line-clamp-3 text-sm font-medium leading-snug text-zinc-900 dark:text-zinc-100">{tarea.titulo}</p>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          <EstadoBadge
+            estado={tarea.estado_documental}
+            etiqueta={tarea.estado_documental === "completo" ? "Doc" : "Doc pend."}
+          />
+          <EstadoBadge
+            estado={tarea.estado_codigo}
+            etiqueta={
+              tarea.estado_codigo === "completo"
+                ? "Código"
+                : tarea.estado_codigo === "no_aplica"
+                  ? "Cód. n/a"
+                  : "Cód pend."
+            }
+          />
+        </div>
+        {fechaLabel ? (
+          <div className="mt-2 flex min-w-0 items-center gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+            <CalendarClock className="size-3.5 shrink-0 text-zinc-400 dark:text-zinc-500" aria-hidden />
+            <span className="min-w-0 leading-snug">
+              <span className="text-zinc-500 dark:text-zinc-500">Última revisión: </span>
+              {fechaLabel}
+            </span>
           </div>
-          {fechaLabel ? (
-            <div className="mt-2 flex min-w-0 items-center gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-400">
-              <CalendarClock className="size-3.5 shrink-0 text-zinc-400 dark:text-zinc-500" aria-hidden />
-              <span className="min-w-0 leading-snug">
-                <span className="text-zinc-500 dark:text-zinc-500">Última revisión: </span>
-                {fechaLabel}
-              </span>
-            </div>
-          ) : (
-            <div className="mt-2 flex min-w-0 items-center gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-400">
-              <CalendarClock className="size-3.5 shrink-0 opacity-50" aria-hidden />
-              <span>Sin revisiones</span>
-            </div>
-          )}
-        </MotionLink>
-      </div>
+        ) : (
+          <div className="mt-2 flex min-w-0 items-center gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+            <CalendarClock className="size-3.5 shrink-0 opacity-50" aria-hidden />
+            <span>Sin revisiones</span>
+          </div>
+        )}
+      </motion.span>
     </div>
   );
 }
@@ -241,8 +269,10 @@ export function TareasBoard({ tareas, onTareasChange }: TareasBoardProps) {
   const columns = useMemo(() => buildColumns(tareas), [tareas]);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 6 } }),
+    useSensor(PointerSensor, {
+      activationConstraint: { delay: 260, tolerance: 8 },
+    }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 260, tolerance: 10 } }),
     useSensor(KeyboardSensor),
   );
 
