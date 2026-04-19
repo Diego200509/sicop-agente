@@ -10,7 +10,7 @@ import { Input } from "@/src/components/ui/input";
 import { useTareas } from "@/src/hooks/use-tareas";
 
 export default function TareasPage() {
-  const { tareas, loading, error, search, setSearch } = useTareas();
+  const { tareas, setTareas, loading, error, search, setSearch } = useTareas();
 
   return (
     <AppPageShell title="Tareas" description="Vista tablero por fases.">
@@ -48,7 +48,9 @@ export default function TareasPage() {
         </Card>
       )}
 
-      {!loading && !error && tareas.length > 0 && <TareasBoard tareas={tareas} />}
+      {!loading && !error && tareas.length > 0 && (
+        <TareasBoard tareas={tareas} onTareasChange={setTareas} />
+      )}
     </AppPageShell>
   );
 }

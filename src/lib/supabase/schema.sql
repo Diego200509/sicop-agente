@@ -10,6 +10,8 @@ create table if not exists public.tareas (
   fase text not null,
   descripcion text not null,
   url_tarjeta text,
+  /** Orden manual dentro de la misma fase (tablero Kanban). */
+  orden integer,
   /** Dedupe documental/código: misma tarjeta lógica aunque n8n envíe distintos id_tarea (ver tarea-match-key). */
   merge_key text,
   created_at timestamptz not null default now(),

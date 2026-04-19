@@ -18,17 +18,9 @@ type TruncatedPreviewProps = {
   lines?: 3 | 4 | 5 | 6;
   moreLabel?: string;
   className?: string;
-  /**
-   * `markdown`: react-markdown + GFM (analisis documental o de código).
-   * `plain`: texto literal sin interpretar.
-   */
   format?: "plain" | "markdown";
 };
 
-/**
- * Vista previa con truncado (line-clamp) y enlace "Ver más".
- * Use `format="markdown"` cuando el texto sea Markdown (p. ej. revisiones documentales o de código).
- */
 export function TruncatedPreview({
   text,
   moreHref,

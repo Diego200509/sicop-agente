@@ -10,6 +10,8 @@ export type TareaListado = {
   estado_documental: "completo" | "pendiente";
   estado_codigo: "completo" | "pendiente" | "no_aplica";
   fecha_ultima_revision: string | null;
+  orden: number | null;
+  created_at: string;
 };
 
 export type TareaDetalle = {
@@ -83,8 +85,7 @@ export class TareaRepository {
   async listTareas(search?: string): Promise<TareaListado[]> {
     let query = this.supabase
       .from("tareas")
-      .select("id,id_tarea,titulo,fase,revisiones(tipo_revision,fecha_revision)")
-      .order("created_at", { ascending: false });
+      .select("id,id_tarea,titulo,fase,orden,created_at,revisiones(tipo_revision,fecha_revision)");
 
     if (search) query = query.ilike("titulo", `%${search}%`);
 
@@ -96,10 +97,12 @@ export class TareaRepository {
       id_tarea: string;
       titulo: string;
       fase: string;
+      orden: number | null;
+      created_at: string;
       revisiones: Array<{ tipo_revision: "documental" | "codigo"; fecha_revision: string | null }> | null;
     }>;
 
-    return rows.map((row) => {
+    const mapped = rows.map((row) => {
       const revisiones = row.revisiones ?? [];
       const hasDocumental = revisiones.some((revision) => revision.tipo_revision === "documental");
       const hasCodigo = revisiones.some((revision) => revision.tipo_revision === "codigo");
@@ -109,7 +112,7 @@ export class TareaRepository {
         .filter(Boolean)
         .sort((a, b) => new Date(b as string).getTime() - new Date(a as string).getTime())[0];
 
-      return {
+      const item: TareaListado = {
         id: row.id,
         id_tarea: row.id_tarea,
         titulo: row.titulo,
@@ -117,8 +120,25 @@ export class TareaRepository {
         estado_documental: hasDocumental ? "completo" : "pendiente",
         estado_codigo: codeRequired ? (hasCodigo ? "completo" : "pendiente") : "no_aplica",
         fecha_ultima_revision: (ultimaRevision as string | undefined) ?? null,
+        orden: row.orden ?? null,
+        created_at: row.created_at,
       };
+      return item;
     });
+
+    return mapped;
+  }
+
+  async updateOrdenBatch(updates: Array<{ id: string; orden: number }>): Promise<void> {
+    if (updates.length === 0) return;
+    const now = new Date().toISOString();
+    for (const u of updates) {
+      const { error } = await this.supabase
+        .from("tareas")
+        .update({ orden: u.orden, updated_at: now })
+        .eq("id", u.id);
+      if (error) throw new Error(`Error actualizando orden de tarea ${u.id}: ${error.message}`);
+    }
   }
 
   async getTareaDetail(idOrIdTarea: string): Promise<TareaDetalle | null> {

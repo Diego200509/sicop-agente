@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 
 import type { TareaTablaItem } from "@/src/components/tareas/tareas-table";
 
 type UseTareasResult = {
   tareas: TareaTablaItem[];
+  setTareas: Dispatch<SetStateAction<TareaTablaItem[]>>;
   loading: boolean;
   error: string | null;
   search: string;
@@ -53,6 +54,7 @@ export function useTareas(): UseTareasResult {
   return useMemo(
     () => ({
       tareas,
+      setTareas,
       loading,
       error,
       search,

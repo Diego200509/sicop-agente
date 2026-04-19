@@ -12,6 +12,8 @@ export type TareaTablaItem = {
   estado_documental: "completo" | "pendiente";
   estado_codigo: "completo" | "pendiente" | "no_aplica";
   fecha_ultima_revision: string | null;
+  orden: number | null;
+  created_at: string;
 };
 
 type TareasTableProps = {
