@@ -1,3 +1,10 @@
+import type { DocumentQuestionType } from "@/src/lib/document-sections";
+import type { PhaseMode } from "@/src/lib/fases";
+
+export type ChatUserIntent = "conversacional" | "consulta" | "analisis";
+
+export type { DocumentQuestionType } from "@/src/lib/document-sections";
+
 export type ChatRole = "user" | "assistant";
 
 export interface ChatMessage {
@@ -18,10 +25,29 @@ export interface ChatResponse {
   messageIdAssistant?: string;
 }
 
+/** Metadatos para armar el system prompt del chat (fase, comparación, alcance). */
+export interface ChatPromptMeta {
+  /** null = contexto general con varias tareas (cada bloque ya refleja su fase). */
+  phaseMode: PhaseMode | null;
+  /** true si el contexto incluye el bloque comparativo documentación vs código. */
+  comparativeActive: boolean;
+  /** Lista de tareas recientes sin foco único. */
+  generalBroad: boolean;
+  /** Intención del mensaje actual; define el formato de la respuesta (solo en sendMessage). */
+  intent?: ChatUserIntent;
+  /** true si el contexto incluye fragmentos del texto fuente (PDF) recuperados por seccion. */
+  documentEvidenceActive?: boolean;
+  /** Numero de secciones incluidas en la evidencia documental (por tarea o cruzada). */
+  documentEvidenceCount?: number;
+  /** Clasificacion de la pregunta respecto al documento fuente. */
+  documentQuestionType?: DocumentQuestionType;
+}
+
 export interface ChatContext {
   mode: "general" | "tarea";
   /** Texto compacto para el modelo */
   contextText: string;
+  promptMeta?: ChatPromptMeta;
 }
 
 export interface TareaContext {

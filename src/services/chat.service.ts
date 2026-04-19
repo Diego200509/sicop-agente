@@ -1,45 +1,22 @@
 import OpenAI from "openai";
 
+import { getPhaseMode } from "@/src/lib/fases";
 import { getChatGeneralConfig } from "@/src/lib/chat-general-config";
-import { truncateText } from "@/src/lib/chat-text";
 import { ChatRepository } from "@/src/repositories/chat.repository";
 import { RevisionesRepository } from "@/src/repositories/revisiones.repository";
 import { TareasRepository } from "@/src/repositories/tareas.repository";
+import { assembleSingleTaskModelContext } from "@/src/services/chat-context-assembly";
 import { buildGeneralContext, buildTaskFocusedContext } from "@/src/services/chat-general-context";
 import { resolveGeneralTaskFromMessage } from "@/src/services/chat-general-resolution";
-import type { ChatContext, ChatResponse, RevisionContext } from "@/src/types/chat";
+import { detectUserIntent } from "@/src/lib/chat-user-intent";
+import { buildChatSystemPrompt } from "@/src/services/chat-system-prompt";
+import type { ChatContext, ChatPromptMeta, ChatResponse, ChatUserIntent } from "@/src/types/chat";
 
-const SYSTEM_PROMPT = `Eres el asistente del proyecto SICOP. Respondes solo con base en la informacion que se te proporciona en el contexto (tareas y revisiones almacenadas en el sistema).
-Ayudas a interpretar revisiones documentales y revisiones de codigo, comparas cumplimiento, diferencias, riesgos y observaciones entre ambas cuando aplique.
-Si falta informacion en el contexto, dilo con claridad. No inventes datos ni supongas fuera del contexto.
-Responde en espanol, de forma profesional y concisa.`;
-
-function formatRevisionDoc(r: RevisionContext | null): string {
-  if (!r) return "(Sin revision documental registrada)";
-  return [
-    `Fecha: ${r.fecha_revision ?? "N/D"}`,
-    `Texto PDF (extracto): ${truncateText(r.texto_pdf, 600)}`,
-    `Analisis documental: ${truncateText(r.analisis_documental, 1200)}`,
-  ].join("\n");
-}
-
-function formatRevisionCode(r: RevisionContext | null): string {
-  if (!r) return "(Sin revision de codigo registrada)";
-  const repo = [r.repo_owner, r.repo_name].filter(Boolean).join("/");
-  return [
-    `Fecha: ${r.fecha_revision ?? "N/D"}`,
-    `PR: ${r.pr_title ?? "N/D"} | Repo: ${repo || "N/D"}`,
-    `Codigo PR (extracto): ${truncateText(r.codigo_pr, 600)}`,
-    `Analisis codigo: ${truncateText(r.analisis_codigo, 1200)}`,
-  ].join("\n");
-}
-
-function formatHistoryBlock(messages: Array<{ rol: string; mensaje: string }>): string {
-  if (messages.length === 0) return "(Sin mensajes previos en este hilo)";
-  return messages
-    .map((m) => `${m.rol === "user" ? "Usuario" : "Asistente"}: ${truncateText(m.mensaje, 1500)}`)
-    .join("\n");
-}
+const DEFAULT_PROMPT_META: ChatPromptMeta = {
+  phaseMode: null,
+  comparativeActive: false,
+  generalBroad: true,
+};
 
 export class ChatService {
   private openai: OpenAI;
@@ -60,43 +37,72 @@ export class ChatService {
     return process.env.OPENAI_CHAT_MODEL ?? "gpt-4o-mini";
   }
 
-  async buildContext(tareaUuid: string | null): Promise<ChatContext> {
+  async buildContext(
+    tareaUuid: string | null,
+    opts?: { userMessage?: string; intent?: ChatUserIntent },
+  ): Promise<ChatContext> {
     if (tareaUuid) {
       const tarea = await this.tareasRepo.getByUuid(tareaUuid);
       if (!tarea) {
-        return { mode: "tarea", contextText: "(Tarea no encontrada)" };
+        return {
+          mode: "tarea",
+          contextText: "(Tarea no encontrada)",
+          promptMeta: { phaseMode: null, comparativeActive: false, generalBroad: false },
+        };
       }
+
+      const phaseMode = getPhaseMode(tarea.fase);
+      const config = getChatGeneralConfig();
+      const maxCode = 800;
+      const limits = {
+        maxPdf: config.focusMaxPdf,
+        maxDocAnalysis: config.focusMaxAnalysis,
+        maxCode,
+        maxCodeAnalysis: config.focusMaxAnalysis,
+      };
 
       const [doc, code, history] = await Promise.all([
         this.revisionesRepo.getLatestByType(tareaUuid, "documental"),
-        this.revisionesRepo.getLatestByType(tareaUuid, "codigo"),
+        phaseMode === "mixto" ? this.revisionesRepo.getLatestByType(tareaUuid, "codigo") : Promise.resolve(null),
         this.chatRepo.getLastMessagesForContext(tareaUuid, 6),
       ]);
 
-      const ctx = [
-        "## Tarea",
-        `ID interno: ${tarea.id}`,
-        `ID tarjeta: ${tarea.id_tarea}`,
-        `Titulo: ${tarea.titulo}`,
-        `Fase: ${tarea.fase}`,
-        `Descripcion: ${truncateText(tarea.descripcion, 2000)}`,
-        "",
-        "## Revision documental mas reciente",
-        formatRevisionDoc(doc),
-        "",
-        "## Revision de codigo mas reciente",
-        formatRevisionCode(code),
-        "",
-        "## Ultimos mensajes del chat de esta tarea (max 6)",
-        formatHistoryBlock(history),
-      ].join("\n");
+      const assembled = assembleSingleTaskModelContext({
+        variant: "tarea_thread",
+        tarea,
+        doc,
+        code,
+        history,
+        limits,
+        maxDesc: 2000,
+        maxHistoryMsg: 1500,
+        userMessage: opts?.userMessage,
+        intent: opts?.intent,
+      });
 
-      return { mode: "tarea", contextText: ctx };
+      return {
+        mode: "tarea",
+        contextText: assembled.text,
+        promptMeta: {
+          phaseMode: assembled.phaseMode,
+          comparativeActive: assembled.comparativeActive,
+          generalBroad: false,
+          documentEvidenceActive: assembled.documentEvidenceActive,
+          documentEvidenceCount: assembled.documentEvidenceCount,
+          documentQuestionType: assembled.documentQuestionType,
+        },
+      };
     }
 
     const config = getChatGeneralConfig();
-    const contextText = await buildGeneralContext(this.tareasRepo, this.revisionesRepo, this.chatRepo, config);
-    return { mode: "general", contextText };
+    const { contextText, promptMeta } = await buildGeneralContext(
+      this.tareasRepo,
+      this.revisionesRepo,
+      this.chatRepo,
+      config,
+      opts,
+    );
+    return { mode: "general", contextText, promptMeta };
   }
 
   async sendMessage(userMessage: string, tareaUuid: string | null): Promise<ChatResponse> {
@@ -107,11 +113,16 @@ export class ChatService {
 
     await this.chatRepo.insertMessage({ tareaId: tareaUuid, rol: "user", mensaje: trimmed });
 
+    const intent = detectUserIntent(trimmed);
+    const contextOpts = { userMessage: trimmed, intent };
+
     let contextText: string;
+    let promptMeta: ChatPromptMeta = DEFAULT_PROMPT_META;
 
     if (tareaUuid) {
-      const built = await this.buildContext(tareaUuid);
+      const built = await this.buildContext(tareaUuid, contextOpts);
       contextText = built.contextText;
+      promptMeta = built.promptMeta ?? DEFAULT_PROMPT_META;
     } else {
       const config = getChatGeneralConfig();
       const pool = await this.tareasRepo.listForMatching(config.matchingPool);
@@ -140,23 +151,36 @@ export class ChatService {
       }
 
       if (resolution.kind === "single") {
-        contextText = await buildTaskFocusedContext(
+        const built = await buildTaskFocusedContext(
           resolution.taskId,
           this.tareasRepo,
           this.revisionesRepo,
           this.chatRepo,
           config,
+          contextOpts,
         );
+        contextText = built.contextText;
+        promptMeta = built.promptMeta;
       } else {
-        contextText = await buildGeneralContext(this.tareasRepo, this.revisionesRepo, this.chatRepo, config);
+        const built = await buildGeneralContext(
+          this.tareasRepo,
+          this.revisionesRepo,
+          this.chatRepo,
+          config,
+          contextOpts,
+        );
+        contextText = built.contextText;
+        promptMeta = built.promptMeta;
       }
     }
+
+    const systemPrompt = buildChatSystemPrompt({ ...promptMeta, intent });
 
     const completion = await this.openai.chat.completions.create({
       model: this.model(),
       temperature: 0.3,
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: systemPrompt },
         {
           role: "user",
           content: `Contexto del sistema (no inventes datos fuera de esto):\n\n${contextText}\n\n---\n\nPregunta del usuario:\n${trimmed}`,

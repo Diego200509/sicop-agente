@@ -2,90 +2,122 @@ import type { ChatRepository } from "@/src/repositories/chat.repository";
 import type { RevisionesRepository } from "@/src/repositories/revisiones.repository";
 import type { TareasRepository } from "@/src/repositories/tareas.repository";
 import { getChatGeneralConfig, type ChatGeneralConfig } from "@/src/lib/chat-general-config";
-import { truncateText } from "@/src/lib/chat-text";
-import type { RevisionContext } from "@/src/types/chat";
+import {
+  buildCrossTaskDocumentEvidenceBlock,
+  classifyDocumentQuestion,
+  findRelevantDocumentSections,
+  parseDocumentSections,
+  shouldAttemptCrossTaskDocumentEvidence,
+  type DocumentSection,
+} from "@/src/lib/document-sections";
+import {
+  assembleGeneralListTaskBlock,
+  assembleSingleTaskModelContext,
+  formatHistoryBlock,
+} from "@/src/services/chat-context-assembly";
+import { getPhaseMode } from "@/src/lib/fases";
+import type { ChatPromptMeta, ChatUserIntent } from "@/src/types/chat";
 
-function formatHistoryBlock(messages: Array<{ rol: string; mensaje: string }>, maxMsg: number): string {
-  if (messages.length === 0) return "(Sin mensajes previos en este hilo)";
-  return messages
-    .map((m) => `${m.rol === "user" ? "Usuario" : "Asistente"}: ${truncateText(m.mensaje, maxMsg)}`)
-    .join("\n");
-}
+export type BuiltChatContext = {
+  contextText: string;
+  promptMeta: ChatPromptMeta;
+};
 
-function formatRevisionDocGeneral(r: RevisionContext | null, maxAnalysis: number): string {
-  if (!r) return "(Sin revision documental registrada)";
-  return [
-    `Fecha ultima revision documental: ${r.fecha_revision ?? "N/D"}`,
-    `Analisis documental (extracto): ${truncateText(r.analisis_documental, maxAnalysis) || "(sin analisis)"}`,
-  ].join("\n");
-}
-
-function formatRevisionCodeGeneral(r: RevisionContext | null, maxAnalysis: number): string {
-  if (!r) return "(Sin revision de codigo registrada)";
-  const repo = [r.repo_owner, r.repo_name].filter(Boolean).join("/");
-  return [
-    `Fecha ultima revision codigo: ${r.fecha_revision ?? "N/D"}`,
-    `PR: ${r.pr_title ?? "N/D"} | Repo: ${repo || "N/D"}`,
-    `Analisis codigo (extracto): ${truncateText(r.analisis_codigo, maxAnalysis) || "(sin analisis)"}`,
-  ].join("\n");
-}
-
-function formatRevisionDocFocused(r: RevisionContext | null, maxPdf: number, maxAnalysis: number): string {
-  if (!r) return "(Sin revision documental registrada)";
-  const pdfPart =
-    maxPdf > 0
-      ? `Texto PDF (extracto breve, no completo): ${truncateText(r.texto_pdf, maxPdf)}`
-      : "(Texto PDF omitido en este modo)";
-  return [
-    `Fecha: ${r.fecha_revision ?? "N/D"}`,
-    pdfPart,
-    `Analisis documental: ${truncateText(r.analisis_documental, maxAnalysis)}`,
-  ].join("\n");
-}
-
-function formatRevisionCodeFocused(r: RevisionContext | null, maxCode: number, maxAnalysis: number): string {
-  if (!r) return "(Sin revision de codigo registrada)";
-  const repo = [r.repo_owner, r.repo_name].filter(Boolean).join("/");
-  return [
-    `Fecha: ${r.fecha_revision ?? "N/D"}`,
-    `PR: ${r.pr_title ?? "N/D"} | Repo: ${repo || "N/D"}`,
-    `Codigo PR (extracto): ${truncateText(r.codigo_pr, maxCode)}`,
-    `Analisis codigo: ${truncateText(r.analisis_codigo, maxAnalysis)}`,
-  ].join("\n");
-}
+export type ChatContextBuildOptions = {
+  userMessage?: string;
+  intent?: ChatUserIntent;
+};
 
 export async function buildGeneralContext(
   tareasRepo: TareasRepository,
   revisionesRepo: RevisionesRepository,
   chatRepo: ChatRepository,
   config: ChatGeneralConfig = getChatGeneralConfig(),
-): Promise<string> {
+  options?: ChatContextBuildOptions,
+): Promise<BuiltChatContext> {
   const tareas = await tareasRepo.getLatestForGeneralChat(config.maxTasks);
   const ids = tareas.map((t) => t.id);
   const revMap = await revisionesRepo.getLatestDocAndCodeForTareas(ids);
   const history = await chatRepo.getLastMessagesForContext(null, 6);
 
+  const comparisonLimits = {
+    maxPdf: 200,
+    maxDocAnalysis: 450,
+    maxCode: 320,
+    maxCodeAnalysis: 450,
+  };
+
+  let anyComparative = false;
   const bloquesTareas = tareas.map((t) => {
     const pair = revMap.get(t.id);
     const doc = pair?.doc ?? null;
-    const code = pair?.code ?? null;
-    return [
-      `### ${t.id_tarea} — ${t.titulo}`,
-      `Fase: ${t.fase}`,
-      `Descripcion: ${truncateText(t.descripcion, config.maxDesc)}`,
-      formatRevisionDocGeneral(doc, config.maxAnalysis),
-      formatRevisionCodeGeneral(code, config.maxAnalysis),
-    ].join("\n");
+    const phaseMode = getPhaseMode(t.fase);
+    const code = phaseMode === "mixto" ? (pair?.code ?? null) : null;
+    const { text, hadComparativeBlock } = assembleGeneralListTaskBlock({
+      tarea: t,
+      doc,
+      code,
+      maxDesc: config.maxDesc,
+      maxAnalysis: config.maxAnalysis,
+      comparisonLimits,
+    });
+    if (hadComparativeBlock) anyComparative = true;
+    return text;
   });
 
   const maxLabel = Math.min(config.maxTasks, 25);
-  return [
+  let contextText = [
     `## Tareas recientes para contexto general (max ${maxLabel})`,
     bloquesTareas.length ? bloquesTareas.join("\n\n") : "(No hay tareas)",
     "",
     "## Ultimos mensajes del chat general (max 6)",
     formatHistoryBlock(history, 1500),
   ].join("\n");
+
+  let documentEvidenceActive = false;
+  let documentEvidenceCount = 0;
+
+  if (
+    options?.userMessage?.trim() &&
+    options?.intent &&
+    shouldAttemptCrossTaskDocumentEvidence(options.userMessage, options.intent)
+  ) {
+    const items: Array<{ tareaLabel: string; sections: DocumentSection[]; hints: string[] }> = [];
+    for (const t of tareas.slice(0, 6)) {
+      const doc = revMap.get(t.id)?.doc;
+      if (!doc?.texto_pdf?.trim()) continue;
+      const secs = parseDocumentSections(doc.texto_pdf);
+      const { sections: picked } = findRelevantDocumentSections(options.userMessage, secs, {
+        maxSections: 1,
+        maxCharsPerSection: 680,
+        maxTotalChars: 720,
+        minScore: 24,
+      });
+      if (picked.length > 0) {
+        items.push({ tareaLabel: `${t.id_tarea} — ${t.titulo}`, sections: picked, hints: [] });
+      }
+      if (items.length >= 3) break;
+    }
+    const cross = buildCrossTaskDocumentEvidenceBlock(items, 3400);
+    if (cross) {
+      contextText = `${contextText}\n\n${cross}`;
+      documentEvidenceActive = true;
+      documentEvidenceCount = items.length;
+    }
+  }
+
+  const promptMeta: ChatPromptMeta = {
+    phaseMode: null,
+    comparativeActive: anyComparative,
+    generalBroad: true,
+    documentEvidenceActive,
+    documentEvidenceCount,
+  };
+  if (options?.userMessage?.trim() && options.intent) {
+    promptMeta.documentQuestionType = classifyDocumentQuestion(options.userMessage, options.intent);
+  }
+
+  return { contextText, promptMeta };
 }
 
 export async function buildTaskFocusedContext(
@@ -94,37 +126,53 @@ export async function buildTaskFocusedContext(
   revisionesRepo: RevisionesRepository,
   chatRepo: ChatRepository,
   config: ChatGeneralConfig = getChatGeneralConfig(),
-): Promise<string> {
+  options?: ChatContextBuildOptions,
+): Promise<BuiltChatContext> {
   const tarea = await tareasRepo.getByUuid(tareaUuid);
   if (!tarea) {
-    return "(Tarea no encontrada)";
+    return {
+      contextText: "(Tarea no encontrada)",
+      promptMeta: { phaseMode: null, comparativeActive: false, generalBroad: false },
+    };
   }
+
+  const phaseMode = getPhaseMode(tarea.fase);
+  const maxCode = 800;
+  const limits = {
+    maxPdf: config.focusMaxPdf,
+    maxDocAnalysis: config.focusMaxAnalysis,
+    maxCode,
+    maxCodeAnalysis: config.focusMaxAnalysis,
+  };
 
   const [doc, code, history] = await Promise.all([
     revisionesRepo.getLatestByType(tareaUuid, "documental"),
-    revisionesRepo.getLatestByType(tareaUuid, "codigo"),
+    phaseMode === "mixto" ? revisionesRepo.getLatestByType(tareaUuid, "codigo") : Promise.resolve(null),
     chatRepo.getLastMessagesForContext(null, 6),
   ]);
 
-  const maxCode = 800;
+  const assembled = assembleSingleTaskModelContext({
+    variant: "general_focused",
+    tarea,
+    doc,
+    code,
+    history,
+    limits,
+    maxDesc: config.focusMaxDesc,
+    maxHistoryMsg: 1500,
+    userMessage: options?.userMessage,
+    intent: options?.intent,
+  });
 
-  const ctx = [
-    "## Tarea enfocada (detectada automaticamente en chat general)",
-    `ID interno: ${tarea.id}`,
-    `ID tarjeta: ${tarea.id_tarea}`,
-    `Titulo: ${tarea.titulo}`,
-    `Fase: ${tarea.fase}`,
-    `Descripcion: ${truncateText(tarea.descripcion, config.focusMaxDesc)}`,
-    "",
-    "## Revision documental mas reciente",
-    formatRevisionDocFocused(doc, config.focusMaxPdf, config.focusMaxAnalysis),
-    "",
-    "## Revision de codigo mas reciente",
-    formatRevisionCodeFocused(code, maxCode, config.focusMaxAnalysis),
-    "",
-    "## Ultimos mensajes del chat general (max 6)",
-    formatHistoryBlock(history, 1500),
-  ].join("\n");
-
-  return ctx;
+  return {
+    contextText: assembled.text,
+    promptMeta: {
+      phaseMode: assembled.phaseMode,
+      comparativeActive: assembled.comparativeActive,
+      generalBroad: false,
+      documentEvidenceActive: assembled.documentEvidenceActive,
+      documentEvidenceCount: assembled.documentEvidenceCount,
+      documentQuestionType: assembled.documentQuestionType,
+    },
+  };
 }

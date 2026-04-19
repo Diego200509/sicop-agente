@@ -23,3 +23,12 @@ export function normalizePhase(value: string | null | undefined): string {
 export function requiresCodeReviewByPhase(phase: string | null | undefined): boolean {
   return PHASES_WITH_CODE_REVIEW.has(normalizePhase(phase));
 }
+
+export type PhaseMode = "documental" | "mixto";
+
+export function getPhaseMode(fase: string | null | undefined): PhaseMode {
+  if (!normalizePhase(fase)) {
+    return "documental";
+  }
+  return requiresCodeReviewByPhase(fase) ? "mixto" : "documental";
+}
