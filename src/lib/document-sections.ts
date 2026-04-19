@@ -9,6 +9,41 @@ export type DocumentSection = {
   body: string;
 };
 
+/** Referencia para citar en prosa la seccion principal (trazabilidad académica). */
+export type DocumentPrimaryCitation = {
+  /** Identificador de seccion (ej. "6", "VII", "3.1") */
+  label: string;
+  /** Titulo tal como se indexo en el parser */
+  title: string;
+  /** Cita compacta (ej. "6. Responsabilidades", "VII. Reglas de Negocio") */
+  ref: string;
+};
+
+/**
+ * Normaliza id + titulo a una referencia legible para el modelo (sin inventar datos nuevos).
+ */
+export function formatSectionCitationForProse(id: string, rawTitle: string): string {
+  const idNorm = id.trim();
+  const t = rawTitle.trim();
+  if (!t) return idNorm;
+  const tl = t.toLowerCase();
+  const il = idNorm.toLowerCase();
+  if (tl === il) return idNorm;
+  if (tl.startsWith(`${il}.`) || tl.startsWith(`${il} `) || tl.startsWith(`${il}—`) || tl.startsWith(`${il}-`)) {
+    const stripped = t.slice(idNorm.length).replace(/^[\s.:-—]+/, "").trim();
+    if (!stripped) return idNorm;
+    return `${idNorm}. ${stripped}`;
+  }
+  return `${idNorm}. ${t}`;
+}
+
+export function buildPrimarySectionCitation(section: DocumentSection): DocumentPrimaryCitation {
+  const label = section.id.trim();
+  const title = section.title.trim();
+  const ref = formatSectionCitationForProse(label, title);
+  return { label, title, ref };
+}
+
 const SPECIFIC_TRIGGERS = [
   "quien",
   "quienes",
@@ -468,6 +503,8 @@ export type DocumentEvidenceResult = {
   block: string;
   questionType: DocumentQuestionType;
   count: number;
+  /** Presente cuando hay al menos una seccion recuperada (la principal es la primera por relevancia). */
+  primaryCitation?: DocumentPrimaryCitation;
 };
 
 /**
@@ -490,9 +527,12 @@ export function extractDocumentEvidenceForQuestion(
     return { block: "", questionType, count: 0 };
   }
 
+  const primaryCitation = buildPrimarySectionCitation(picked[0]!);
+
   return {
     block: buildDocumentEvidenceBlock(picked, { matchedHints }),
     questionType,
     count: picked.length,
+    primaryCitation,
   };
 }

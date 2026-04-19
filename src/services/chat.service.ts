@@ -90,6 +90,13 @@ export class ChatService {
           documentEvidenceActive: assembled.documentEvidenceActive,
           documentEvidenceCount: assembled.documentEvidenceCount,
           documentQuestionType: assembled.documentQuestionType,
+          ...(assembled.documentPrimaryCitation
+            ? {
+                documentPrimarySectionLabel: assembled.documentPrimaryCitation.label,
+                documentPrimarySectionTitle: assembled.documentPrimaryCitation.title,
+                documentPrimarySectionRef: assembled.documentPrimaryCitation.ref,
+              }
+            : {}),
         },
       };
     }

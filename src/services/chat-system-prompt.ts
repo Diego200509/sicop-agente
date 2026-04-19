@@ -10,10 +10,56 @@ function appendDocumentSourceRules(meta: ChatPromptMeta): string[] {
     lines.push(
       "",
       "## Texto fuente del documento (evidencia recuperada)",
-      "El contexto puede incluir 'Evidencia documental relevante' o 'Evidencia documental cruzada': son fragmentos del texto extraido del PDF, seleccionados por seccion segun la pregunta.",
+      "El contexto incluye el bloque 'Evidencia documental relevante' o 'Evidencia documental cruzada': fragmentos del texto extraido del PDF, seleccionados por seccion segun la pregunta.",
       "Prioriza ese bloque frente a inferencias o parafrasis del analisis documental cuando la pregunta pida datos puntuales (nombres, alcance, objetivos, normativa, requerimientos, secciones).",
       "Si aparecen nombres propios, cargos o listas en la evidencia, no los sustituyas por roles genericos.",
       "Si el usuario pide 'textualmente' o una cita literal y no esta en la evidencia ni en el resto del contexto, dilo sin inventar.",
+    );
+
+    const ref = meta.documentPrimarySectionRef?.trim();
+    const multi = (meta.documentEvidenceCount ?? 0) > 1;
+
+    lines.push(
+      "",
+      "## Trazabilidad y citacion academica (solo porque hay evidencia recuperada)",
+      "Solo en esta situacion (bloque de evidencia presente) debes anclar la respuesta al documento con tono formal cuando el contenido provenga de ese bloque.",
+    );
+
+    if (ref) {
+      lines.push(
+        `Seccion principal identificada por el sistema para citar: "${ref}". Debe coincidir con el primer fragmento destacado dentro del bloque de evidencia.`,
+        "Si la respuesta se apoya en ese fragmento, menciona la fuente de forma natural al inicio o en la primera frase sustantiva, por ejemplo:",
+        `- "Segun la seccion ${ref} del documento, ..."`,
+        `- "De acuerdo con la seccion ${ref}, ..."`,
+        `- "En la seccion ${ref} del documento se indica que ..."`,
+        `Usa exactamente esa referencia (${ref}); no inventes otros numeros, titulos de seccion ni subapartados que no consten en el contexto.`,
+      );
+      if (multi) {
+        lines.push(
+          "Hay varios fragmentos en el bloque de evidencia: puedes mencionar otras secciones citadas alli si aportan, pero la primera cita explicita debe priorizar la seccion principal indicada.",
+        );
+      }
+    } else {
+      lines.push(
+        "No se proporciono una referencia de seccion principal clara: no inventes numeracion ni titulos de seccion.",
+        "Si necesitas contextualizar la fuente, usa formulas generales como:",
+        '- "Con base en la evidencia documental recuperada en el contexto, ..."',
+        '- "De acuerdo con los fragmentos del documento fuente incluidos en el contexto, ..."',
+      );
+    }
+
+    if (intent === "analisis") {
+      lines.push(
+        "En modo analisis: cuando el argumento se apoye en la evidencia, incorpora la referencia a la seccion principal (si figura arriba) preferentemente en ### Resumen y, si aplica, en ### Observaciones.",
+      );
+    } else {
+      lines.push(
+        "En modo consulta: si la respuesta se apoya en la evidencia, incorpora la referencia a la seccion principal en la primera parte relevante; no uses formulas de cita vacias si no estas usando el fragmento.",
+      );
+    }
+
+    lines.push(
+      "No afirmes que algo proviene del documento ni cites secciones si tu razonamiento no se apoya de hecho en el bloque de evidencia o en el resto del contexto.",
     );
   } else if (meta.documentQuestionType === "specific") {
     lines.push(

@@ -1,4 +1,8 @@
-import { extractDocumentEvidenceForQuestion, type DocumentQuestionType } from "@/src/lib/document-sections";
+import {
+  extractDocumentEvidenceForQuestion,
+  type DocumentPrimaryCitation,
+  type DocumentQuestionType,
+} from "@/src/lib/document-sections";
 import { getPhaseMode, type PhaseMode } from "@/src/lib/fases";
 import { truncateText } from "@/src/lib/chat-text";
 import type { ChatUserIntent, RevisionContext, TareaContext } from "@/src/types/chat";
@@ -114,6 +118,7 @@ export type AssembledSingleTaskContext = {
   documentEvidenceActive: boolean;
   documentEvidenceCount: number;
   documentQuestionType: DocumentQuestionType;
+  documentPrimaryCitation?: DocumentPrimaryCitation;
 };
 
 export function formatHistoryBlock(
@@ -164,6 +169,7 @@ export function assembleSingleTaskModelContext(params: {
   let documentEvidenceActive = false;
   let documentEvidenceCount = 0;
   let documentQuestionType: DocumentQuestionType = "none";
+  let documentPrimaryCitation: DocumentPrimaryCitation | undefined;
 
   if (userMessage?.trim() && intent) {
     const ev = extractDocumentEvidenceForQuestion(userMessage, intent, doc?.texto_pdf, {
@@ -177,6 +183,7 @@ export function assembleSingleTaskModelContext(params: {
       lines.push("", ev.block);
       documentEvidenceActive = true;
       documentEvidenceCount = ev.count;
+      documentPrimaryCitation = ev.primaryCitation;
     }
   }
 
@@ -208,6 +215,7 @@ export function assembleSingleTaskModelContext(params: {
     documentEvidenceActive,
     documentEvidenceCount,
     documentQuestionType,
+    documentPrimaryCitation,
   };
 }
 

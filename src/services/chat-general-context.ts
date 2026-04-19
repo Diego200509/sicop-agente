@@ -4,10 +4,12 @@ import type { TareasRepository } from "@/src/repositories/tareas.repository";
 import { getChatGeneralConfig, type ChatGeneralConfig } from "@/src/lib/chat-general-config";
 import {
   buildCrossTaskDocumentEvidenceBlock,
+  buildPrimarySectionCitation,
   classifyDocumentQuestion,
   findRelevantDocumentSections,
   parseDocumentSections,
   shouldAttemptCrossTaskDocumentEvidence,
+  type DocumentPrimaryCitation,
   type DocumentSection,
 } from "@/src/lib/document-sections";
 import {
@@ -76,6 +78,7 @@ export async function buildGeneralContext(
 
   let documentEvidenceActive = false;
   let documentEvidenceCount = 0;
+  let crossPrimaryCitation: DocumentPrimaryCitation | undefined;
 
   if (
     options?.userMessage?.trim() &&
@@ -103,6 +106,10 @@ export async function buildGeneralContext(
       contextText = `${contextText}\n\n${cross}`;
       documentEvidenceActive = true;
       documentEvidenceCount = items.length;
+      const firstSec = items[0]?.sections[0];
+      if (firstSec) {
+        crossPrimaryCitation = buildPrimarySectionCitation(firstSec);
+      }
     }
   }
 
@@ -112,6 +119,13 @@ export async function buildGeneralContext(
     generalBroad: true,
     documentEvidenceActive,
     documentEvidenceCount,
+    ...(crossPrimaryCitation
+      ? {
+          documentPrimarySectionLabel: crossPrimaryCitation.label,
+          documentPrimarySectionTitle: crossPrimaryCitation.title,
+          documentPrimarySectionRef: crossPrimaryCitation.ref,
+        }
+      : {}),
   };
   if (options?.userMessage?.trim() && options.intent) {
     promptMeta.documentQuestionType = classifyDocumentQuestion(options.userMessage, options.intent);
@@ -173,6 +187,13 @@ export async function buildTaskFocusedContext(
       documentEvidenceActive: assembled.documentEvidenceActive,
       documentEvidenceCount: assembled.documentEvidenceCount,
       documentQuestionType: assembled.documentQuestionType,
+      ...(assembled.documentPrimaryCitation
+        ? {
+            documentPrimarySectionLabel: assembled.documentPrimaryCitation.label,
+            documentPrimarySectionTitle: assembled.documentPrimaryCitation.title,
+            documentPrimarySectionRef: assembled.documentPrimaryCitation.ref,
+          }
+        : {}),
     },
   };
 }

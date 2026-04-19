@@ -41,6 +41,12 @@ export interface ChatPromptMeta {
   documentEvidenceCount?: number;
   /** Clasificacion de la pregunta respecto al documento fuente. */
   documentQuestionType?: DocumentQuestionType;
+  /** Identificador de la seccion principal recuperada (ej. "6", "VII"). */
+  documentPrimarySectionLabel?: string;
+  /** Titulo de la seccion principal tal como se indexo del PDF. */
+  documentPrimarySectionTitle?: string;
+  /** Referencia lista para citar en prosa (ej. "6. Responsabilidades"). */
+  documentPrimarySectionRef?: string;
 }
 
 export interface ChatContext {
