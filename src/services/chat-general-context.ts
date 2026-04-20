@@ -183,6 +183,7 @@ export async function buildTaskFocusedContext(
     promptMeta: {
       phaseMode: assembled.phaseMode,
       comparativeActive: assembled.comparativeActive,
+      codePrEvidenceActive: assembled.codePrEvidenceActive,
       generalBroad: false,
       documentEvidenceActive: assembled.documentEvidenceActive,
       documentEvidenceCount: assembled.documentEvidenceCount,

@@ -47,6 +47,11 @@ export interface ChatPromptMeta {
   documentPrimarySectionTitle?: string;
   /** Referencia lista para citar en prosa (ej. "6. Responsabilidades"). */
   documentPrimarySectionRef?: string;
+  /**
+   * true si la tarea esta en fase mixta y el extracto codigo_pr del PR no esta vacio.
+   * Sirve para reforzar el prompt de analisis con reglas de evidencia tecnica del codigo.
+   */
+  codePrEvidenceActive?: boolean;
 }
 
 export interface ChatContext {

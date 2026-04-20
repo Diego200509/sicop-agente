@@ -73,6 +73,58 @@ function appendDocumentSourceRules(meta: ChatPromptMeta): string[] {
   return lines;
 }
 
+/**
+ * Refuerzo solo para analisis en fase mixta con extracto codigo_pr presente.
+ * No afecta conversacional, consulta ni analisis documental sin codigo.
+ */
+function appendTechnicalCodeEvidenceRules(meta: ChatPromptMeta): string[] {
+  const intent = meta.intent ?? "consulta";
+  if (intent !== "analisis") return [];
+  if (meta.phaseMode !== "mixto") return [];
+  if (!meta.codePrEvidenceActive) return [];
+
+  return [
+    "",
+    "## Analisis tecnico con evidencia de codigo (obligatorio en este contexto)",
+    "El contexto incluye revision de codigo y extracto del PR (codigo_pr): el analisis debe ser especifico y anclado a esa evidencia; evita respuestas genericas o solo declarativas.",
+    "",
+    "### Contenido esperado",
+    "1. Menciona elementos tecnicos concretos que consten en el extracto o en el analisis de codigo del contexto, por ejemplo:",
+    "   - nombres de funciones, metodos o clases",
+    "   - endpoints o rutas (p. ej. /auth/login)",
+    "   - metodos HTTP (GET, POST, etc.) si aparecen",
+    "   - validaciones, guards, middlewares o comprobaciones visibles en el fragmento",
+    "   - estructuras relevantes (DTOs, esquemas, servicios) solo si aparecen en el contexto",
+    "",
+    "2. Relaciona de forma explicita:",
+    "   - lo que pide o describe el documento o el analisis documental",
+    "   - como se refleja (o no) en el codigo / PR mostrado",
+    "",
+    "3. Cuando encaje, organiza al menos una parte del razonamiento con este esquema (puedes usar subtitulos en Markdown):",
+    "   - **Funcionalidad** (breve)",
+    "   - **Documento**: que solicita o exige segun el contexto",
+    "   - **Codigo**: como se implementa segun el extracto o el analisis de codigo",
+    "   - **Evidencia**: cita literal o parafrase muy cercana al fragmento (funcion, endpoint, validacion, etc.)",
+    "",
+    "### Reglas criticas",
+    "- No respondas de forma generica cuando afirmes algo sobre la implementacion.",
+    "- Evita formulaciones dubitativas como \"el codigo parece\", \"probablemente\", \"generalmente\", salvo que el contexto sea explicitamente insuficiente; en ese caso dilo y no especules.",
+    "- Cada vez que describas comportamiento de la implementacion, incluye al menos un ancla concreta tomada del contexto (funcion, endpoint, validacion o comportamiento observable descrito en el extracto).",
+    "- Si el contexto no contiene fragmento util sobre un aspecto concreto del codigo, escribe de forma explicita: \"No se encontro evidencia en el codigo proporcionado\" para ese punto, sin inventar archivos ni rutas.",
+    "",
+    "### Validaciones y coherencia",
+    "Analiza cuando el contexto lo permita: validacion de datos, reglas de negocio, control de acceso o autenticacion/autorizacion, y coherencia logica entre documento e implementacion. Si no hay datos en el contexto para uno de esos puntos, indiclo en lugar de suponer.",
+    "",
+    "### Diferencias",
+    "Identifica, con evidencia:",
+    "- funcionalidades o requisitos que estan en el documento pero no ves respaldados en el codigo mostrado;",
+    "- comportamientos presentes en el codigo mostrado que no se desprenden claramente del documento.",
+    "",
+    "### Cumplimiento (seccion ### Cumplimiento)",
+    "Usa la etiqueta exacta que exige la plantilla global (Completo | Parcial | No claro | No cumple) y justifica con evidencia del documento y del codigo cuando el tema sea la implementacion frente a lo documentado.",
+  ];
+}
+
 const STRUCTURED_SECTIONS = `Tu respuesta DEBE usar exactamente estas secciones en Markdown (titulo en ### seguido de contenido), en este orden:
 
 ### Resumen
@@ -235,6 +287,7 @@ export function buildChatSystemPrompt(meta: ChatPromptMeta): string {
     "",
     STRUCTURED_SECTIONS,
     ...appendScopeRulesAnalisis(meta),
+    ...appendTechnicalCodeEvidenceRules(meta),
     ...appendDocumentSourceRules(meta),
   ].join("\n");
 }

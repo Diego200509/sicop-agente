@@ -86,6 +86,7 @@ export class ChatService {
         promptMeta: {
           phaseMode: assembled.phaseMode,
           comparativeActive: assembled.comparativeActive,
+          codePrEvidenceActive: assembled.codePrEvidenceActive,
           generalBroad: false,
           documentEvidenceActive: assembled.documentEvidenceActive,
           documentEvidenceCount: assembled.documentEvidenceCount,

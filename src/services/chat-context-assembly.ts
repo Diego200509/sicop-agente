@@ -115,6 +115,8 @@ export type AssembledSingleTaskContext = {
   text: string;
   phaseMode: PhaseMode;
   comparativeActive: boolean;
+  /** Hay texto util en codigo_pr (revision de codigo) para esta tarea mixta. */
+  codePrEvidenceActive: boolean;
   documentEvidenceActive: boolean;
   documentEvidenceCount: number;
   documentQuestionType: DocumentQuestionType;
@@ -166,6 +168,8 @@ export function assembleSingleTaskModelContext(params: {
   ];
 
   let comparativeActive = false;
+  const codePrEvidenceActive =
+    phaseMode === "mixto" && Boolean(code?.codigo_pr?.trim());
   let documentEvidenceActive = false;
   let documentEvidenceCount = 0;
   let documentQuestionType: DocumentQuestionType = "none";
@@ -212,6 +216,7 @@ export function assembleSingleTaskModelContext(params: {
     text: lines.join("\n"),
     phaseMode,
     comparativeActive,
+    codePrEvidenceActive,
     documentEvidenceActive,
     documentEvidenceCount,
     documentQuestionType,
