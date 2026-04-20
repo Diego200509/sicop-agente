@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { AlertCircle, MessageSquare } from "lucide-react";
+import { AlertCircle, ChevronUp, MessageSquare } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 
 import { ChatAssistantPlaceholder } from "@/src/components/chat/chat-assistant-placeholder";
@@ -17,6 +17,7 @@ import { cn } from "@/src/lib/utils";
 import type { ChatMessage } from "@/src/types/chat";
 
 const NEAR_BOTTOM_PX = 140;
+const HISTORY_PAGE_SIZE = 20;
 
 /** Una línea cómoda (text-sm + padding vertical del compositor). */
 const CHAT_COMPOSER_MIN_HEIGHT_PX = 46;
@@ -67,15 +68,34 @@ function messageRowKey(m: UiChatMessage): string {
   return m.id;
 }
 
+function oldestServerMessage(messages: UiChatMessage[]): UiChatMessage | null {
+  for (const m of messages) {
+    if (!isLocalMessageId(m.id)) return m;
+  }
+  return null;
+}
+
+function mergeOlderMessagesFirst(existing: UiChatMessage[], older: ChatMessage[]): UiChatMessage[] {
+  const olderUi = toUiMessages(older);
+  const ids = new Set(existing.map((m) => m.id));
+  const uniqueOlder = olderUi.filter((m) => !ids.has(m.id));
+  return [...uniqueOlder, ...existing];
+}
+
 export function ChatPanel({ tareaId = null, title = "Asistente SICOP", className }: ChatPanelProps) {
   const [messages, setMessages] = useState<UiChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [inFlight, setInFlight] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [hasMoreHistory, setHasMoreHistory] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [olderLoadError, setOlderLoadError] = useState<string | null>(null);
+  const [hasEverRequestedOlder, setHasEverRequestedOlder] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const scrollRestoreRef = useRef<{ prevScrollHeight: number; prevScrollTop: number } | null>(null);
 
   const syncComposerHeight = useCallback(() => {
     const el = textareaRef.current;
@@ -95,16 +115,24 @@ export function ChatPanel({ tareaId = null, title = "Asistente SICOP", className
   const loadHistory = useCallback(async () => {
     setLoadingHistory(true);
     setError(null);
+    setOlderLoadError(null);
+    setHasEverRequestedOlder(false);
+    scrollRestoreRef.current = null;
     try {
       const params = new URLSearchParams();
-      params.set("limit", "20");
+      params.set("limit", String(HISTORY_PAGE_SIZE));
       if (tareaId) params.set("tareaId", tareaId);
       const res = await fetch(`/api/chat?${params.toString()}`, { cache: "no-store" });
       if (!res.ok) throw new Error("No se pudo cargar el historial");
-      const json = (await res.json()) as { data: ChatMessage[] };
-      setMessages(toUiMessages(json.data ?? []));
+      const json = (await res.json()) as { data: ChatMessage[]; hasMore?: boolean };
+      const rows = json.data ?? [];
+      setMessages(toUiMessages(rows));
+      setHasMoreHistory(
+        typeof json.hasMore === "boolean" ? json.hasMore : rows.length >= HISTORY_PAGE_SIZE,
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error al cargar historial");
+      setHasMoreHistory(false);
     } finally {
       setLoadingHistory(false);
     }
@@ -113,6 +141,17 @@ export function ChatPanel({ tareaId = null, title = "Asistente SICOP", className
   useEffect(() => {
     void loadHistory();
   }, [loadHistory]);
+
+  /** Tras insertar mensajes antiguos arriba, conservar la posición visual del scroll. */
+  useLayoutEffect(() => {
+    const payload = scrollRestoreRef.current;
+    if (!payload) return;
+    const el = scrollRef.current;
+    if (el) {
+      el.scrollTop = el.scrollHeight - payload.prevScrollHeight + payload.prevScrollTop;
+    }
+    scrollRestoreRef.current = null;
+  }, [messages]);
 
   /** Primera carga del historial: ir al final sin animación larga */
   useEffect(() => {
@@ -322,6 +361,39 @@ export function ChatPanel({ tareaId = null, title = "Asistente SICOP", className
     setError(null);
   }, []);
 
+  const loadOlderMessages = useCallback(async () => {
+    if (loadingOlder || loadingHistory || !hasMoreHistory) return;
+    const anchor = oldestServerMessage(messages);
+    const scrollEl = scrollRef.current;
+    if (!anchor || !scrollEl) return;
+
+    const prevScrollHeight = scrollEl.scrollHeight;
+    const prevScrollTop = scrollEl.scrollTop;
+
+    setOlderLoadError(null);
+    setLoadingOlder(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("limit", String(HISTORY_PAGE_SIZE));
+      params.set("before", anchor.created_at);
+      if (tareaId) params.set("tareaId", tareaId);
+      const res = await fetch(`/api/chat?${params.toString()}`, { cache: "no-store" });
+      if (!res.ok) throw new Error("No se pudieron cargar mensajes anteriores");
+      const json = (await res.json()) as { data: ChatMessage[]; hasMore?: boolean };
+      const batch = json.data ?? [];
+      setMessages((prev) => mergeOlderMessagesFirst(prev, batch));
+      setHasMoreHistory(
+        typeof json.hasMore === "boolean" ? json.hasMore : batch.length >= HISTORY_PAGE_SIZE,
+      );
+      setHasEverRequestedOlder(true);
+      scrollRestoreRef.current = { prevScrollHeight, prevScrollTop };
+    } catch (e) {
+      setOlderLoadError(e instanceof Error ? e.message : "Error al cargar mensajes anteriores");
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [hasMoreHistory, loadingHistory, loadingOlder, messages, tareaId]);
+
   return (
     <Card
       className={cn(
@@ -341,6 +413,66 @@ export function ChatPanel({ tareaId = null, title = "Asistente SICOP", className
         className="scrollbar-elegant min-h-0 flex-1 space-y-4 overflow-y-auto rounded-lg border border-zinc-200 bg-zinc-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/40"
       >
         {loadingHistory && <p className="text-sm text-zinc-500">Cargando historial...</p>}
+
+        {!loadingHistory && messages.length > 0 && (
+          <div className="flex flex-col items-center gap-2 pb-1">
+            {olderLoadError ? (
+              <div className="flex flex-wrap items-center justify-center gap-2 rounded-full border border-rose-200/80 bg-rose-50/90 px-3 py-1.5 text-xs text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-200">
+                <span className="text-center">{olderLoadError}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-7 shrink-0 rounded-full px-2.5 text-xs text-rose-900 hover:bg-rose-100/80 dark:text-rose-100 dark:hover:bg-rose-900/50"
+                  onClick={() => {
+                    setOlderLoadError(null);
+                    void loadOlderMessages();
+                  }}
+                >
+                  Reintentar
+                </Button>
+              </div>
+            ) : null}
+
+            {hasMoreHistory && !loadingOlder && !olderLoadError ? (
+              <button
+                type="button"
+                onClick={() => void loadOlderMessages()}
+                className={cn(
+                  "group inline-flex items-center gap-1.5 rounded-md px-2 py-1.5",
+                  "text-[11px] font-medium leading-none tracking-wide text-zinc-500",
+                  "transition-[color,background-color,transform] duration-200 ease-out",
+                  "hover:bg-zinc-200/60 hover:text-zinc-800",
+                  "active:scale-[0.98]",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/40 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-50/0 dark:focus-visible:ring-zinc-500/35 dark:focus-visible:ring-offset-transparent",
+                  "dark:text-zinc-400 dark:hover:bg-zinc-800/55 dark:hover:text-zinc-200",
+                )}
+              >
+                <ChevronUp
+                  className="size-3 shrink-0 opacity-50 transition-[opacity,transform] duration-200 group-hover:opacity-80 group-hover:-translate-y-px"
+                  strokeWidth={2}
+                  aria-hidden
+                />
+                <span>Cargar mensajes anteriores</span>
+              </button>
+            ) : null}
+
+            {loadingOlder ? (
+              <div className="flex items-center gap-2 px-2 py-1.5 text-[11px] font-medium tracking-wide text-zinc-500 dark:text-zinc-400">
+                <span
+                  className="size-3 shrink-0 animate-spin rounded-full border border-zinc-300/80 border-t-transparent dark:border-zinc-500/70 dark:border-t-transparent"
+                  aria-hidden
+                />
+                Cargando mensajes…
+              </div>
+            ) : null}
+
+            {!hasMoreHistory && hasEverRequestedOlder ? (
+              <p className="text-center text-[11px] text-zinc-400 dark:text-zinc-500">
+                No hay más mensajes anteriores
+              </p>
+            ) : null}
+          </div>
+        )}
 
         {!loadingHistory && messages.length === 0 && (
           <EmptyState

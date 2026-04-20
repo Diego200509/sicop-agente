@@ -14,12 +14,18 @@ export async function GET(request: Request) {
     const tareaId = searchParams.get("tareaId");
     const limitRaw = searchParams.get("limit");
     const limit = Math.min(50, Math.max(1, Number(limitRaw ?? "20") || 20));
+    const beforeRaw = searchParams.get("before");
+    const beforeCreatedAt =
+      beforeRaw && beforeRaw.trim().length > 0 ? beforeRaw.trim() : undefined;
 
     const repo = new ChatRepository(getSupabaseClient());
     const tareaUuid = tareaId && tareaId.length > 0 ? tareaId : null;
-    const messages = await repo.getMessagesForUi(tareaUuid, limit);
+    const { messages, hasMore } = await repo.getMessagesForUi(tareaUuid, {
+      limit,
+      beforeCreatedAt: beforeCreatedAt ?? null,
+    });
 
-    return NextResponse.json({ data: messages }, { status: 200 });
+    return NextResponse.json({ data: messages, hasMore }, { status: 200 });
   } catch (error) {
     console.error("GET /api/chat:", error);
     return NextResponse.json({ error: "No se pudo cargar el historial" }, { status: 500 });
