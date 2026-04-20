@@ -384,7 +384,7 @@ export function ChatPanel({ tareaId = null, title = "Asistente SICOP", className
                         className="min-h-[2.5rem]"
                         transition={{ type: "spring", stiffness: 380, damping: 30 }}
                       >
-                        <ChatAssistantPlaceholder label="Analizando…" />
+                        <ChatAssistantPlaceholder />
                       </motion.div>
                     ) : m.status === "error" ? (
                       <div className="space-y-3">
