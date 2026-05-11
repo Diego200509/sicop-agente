@@ -159,6 +159,7 @@ function appendScopeRulesAnalisis(meta: ChatPromptMeta): string[] {
       "## Contexto general (varias tareas)",
       "El contexto lista varias tareas: cada bloque indica si la tarea es documental (sin datos de codigo) o mixta.",
       `Incluye esta aclaracion de alcance en el Resumen cuando la pregunta sea general del proyecto: "${scopeLine}"`,
+      "Si el usuario pide listar tareas, ver el contexto de todas las tareas, saber que tareas existen o revisar el estado general, incluye en cada tarea el enlace de Trello como `Enlace: URL` cuando el contexto tenga `URL Trello` distinto de `N/D`.",
       "No compares documentacion con codigo para una tarea marcada como documental o cuando el bloque no incluya revision de codigo.",
       "Si el contexto incluye un subtitulo 'Modo comparativo documentacion vs codigo' para una tarea, debes integrar ese analisis comparativo en Resumen, Cumplimiento, Observaciones, Riesgos y Recomendacion cuando la pregunta lo requiera.",
     );
@@ -220,6 +221,7 @@ function appendScopeRulesConsulta(meta: ChatPromptMeta): string[] {
       "## Alcance (varias tareas)",
       "Varias tareas aparecen en el contexto; respeta el modo documental o mixto de cada bloque.",
       `Incluye esta aclaracion de alcance cuando la pregunta sea general del proyecto: "${scopeLine}"`,
+      "Si el usuario pide listar tareas, ver el contexto de todas las tareas, saber que tareas existen o revisar el estado general, incluye en cada tarea el enlace de Trello como `Enlace: URL` cuando el contexto tenga `URL Trello` distinto de `N/D`.",
       "No asumas datos de codigo o PR para tareas en modo documental.",
       "Si un bloque incluye 'Modo comparativo documentacion vs codigo', puedes contrastar documentacion e implementacion solo para esa tarea y solo con la evidencia mostrada.",
     );
