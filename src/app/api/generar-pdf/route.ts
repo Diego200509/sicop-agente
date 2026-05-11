@@ -1,6 +1,8 @@
 import React, { type ReactElement } from "react";
 import {
   Document,
+  Image,
+  Link,
   Page,
   StyleSheet,
   Text,
@@ -8,6 +10,8 @@ import {
   pdf,
 } from "@react-pdf/renderer";
 import { createClient } from "@supabase/supabase-js";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { NextResponse } from "next/server";
 import { HTMLElement, NodeType, parse, type Node as HtmlNode } from "node-html-parser";
 
@@ -21,6 +25,7 @@ type ReportMetadata = {
   tareas_sin_fecha?: number;
   tareas_en_plazo?: number;
   enviado_a?: string;
+  fecha_revision?: string;
 };
 
 type GeneratePdfPayload = {
@@ -29,68 +34,147 @@ type GeneratePdfPayload = {
   metadata?: ReportMetadata;
 };
 
+type InlineSegment = {
+  text: string;
+  href?: string;
+};
+
 type ReportBlock =
-  | { type: "heading"; level: 1 | 2 | 3; text: string }
-  | { type: "paragraph"; text: string }
-  | { type: "list"; ordered: boolean; items: string[] }
-  | { type: "table"; rows: string[][] }
+  | { type: "heading"; level: 1 | 2 | 3; segments: InlineSegment[] }
+  | { type: "paragraph"; segments: InlineSegment[] }
+  | { type: "list"; ordered: boolean; items: InlineSegment[][] }
+  | { type: "table"; rows: InlineSegment[][][] }
   | { type: "divider" };
 
 const DEFAULT_FILENAME = "reporte-seguimiento-sicop.pdf";
-const DEFAULT_TITLE = "Reporte de seguimiento SICOP";
+const REPORT_TITLE = "Reporte Automático - Proyecto SICOP";
+const REPORT_SUBTITLE = "Agente autónomo de seguimiento del tablero Trello";
+const REPORT_FOOTER = "Reporte generado automáticamente por el agente autónomo SICOP.";
+const ECUADOR_TIME_ZONE = "America/Guayaquil";
+const LOGO_PUBLIC_PATH = path.join(process.cwd(), "public", "aledcore-logo.png");
+const PRIMARY_BLUE = "#0f2a44";
+const SECONDARY_BLUE = "#143d63";
+const ACCENT_BLUE = "#1d4f7a";
+
+let logoDataUriPromise: Promise<string | null> | null = null;
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 46,
-    paddingRight: 42,
-    paddingBottom: 54,
-    paddingLeft: 42,
+    paddingTop: 50,
+    paddingRight: 40,
+    paddingBottom: 62,
+    paddingLeft: 40,
     fontFamily: "Helvetica",
-    fontSize: 11,
-    lineHeight: 1.45,
+    fontSize: 12,
+    lineHeight: 1.5,
+    color: "#1f2937",
+    backgroundColor: "#ffffff",
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 18,
+    marginBottom: 22,
+    paddingTop: 18,
+    paddingRight: 24,
+    paddingBottom: 18,
+    paddingLeft: 24,
+    borderRadius: 10,
+    backgroundColor: PRIMARY_BLUE,
+  },
+  headerLogoBox: {
+    width: 92,
+    height: 58,
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 8,
+    backgroundColor: "#ffffff",
+  },
+  headerLogo: {
+    width: 78,
+    height: 48,
+    objectFit: "contain",
+  },
+  headerCopy: {
+    flex: 1,
+  },
+  headerTitle: {
+    margin: 0,
+    fontSize: 24,
+    fontFamily: "Helvetica-Bold",
+    color: "#ffffff",
+  },
+  headerSubtitle: {
+    marginTop: 6,
+    fontSize: 13,
+    color: "#ffffff",
+  },
+  dateBox: {
+    marginBottom: 22,
+    paddingTop: 12,
+    paddingRight: 16,
+    paddingBottom: 12,
+    paddingLeft: 16,
+    borderLeftWidth: 5,
+    borderLeftColor: ACCENT_BLUE,
+    borderRadius: 8,
+    backgroundColor: "#eaf2f8",
+  },
+  dateText: {
+    fontSize: 13,
     color: "#1f2937",
   },
+  bold: {
+    fontFamily: "Helvetica-Bold",
+  },
   h1: {
+    marginTop: 4,
     marginBottom: 12,
-    fontSize: 22,
+    fontSize: 20,
     fontFamily: "Helvetica-Bold",
     color: "#111827",
   },
   h2: {
-    marginTop: 10,
-    marginBottom: 8,
-    fontSize: 16,
+    marginTop: 26,
+    marginBottom: 10,
+    paddingBottom: 4,
+    borderBottomWidth: 2,
+    borderBottomColor: ACCENT_BLUE,
+    fontSize: 18,
     fontFamily: "Helvetica-Bold",
     color: "#111827",
   },
   h3: {
-    marginTop: 8,
-    marginBottom: 6,
-    fontSize: 13,
+    marginTop: 18,
+    marginBottom: 8,
+    fontSize: 15,
     fontFamily: "Helvetica-Bold",
-    color: "#111827",
+    color: "#374151",
   },
   paragraph: {
-    marginBottom: 8,
+    marginBottom: 10,
+    fontSize: 12,
   },
   list: {
-    marginBottom: 8,
+    marginBottom: 12,
   },
   listItem: {
     flexDirection: "row",
-    marginBottom: 4,
+    marginBottom: 5,
   },
   listBullet: {
     width: 22,
+    fontSize: 12,
   },
   listText: {
     flex: 1,
+    fontSize: 12,
   },
   table: {
     display: "flex",
-    width: "auto",
-    marginTop: 6,
-    marginBottom: 12,
+    width: "100%",
+    marginTop: 12,
+    marginBottom: 20,
     borderStyle: "solid",
     borderWidth: 1,
     borderColor: "#d1d5db",
@@ -100,36 +184,49 @@ const styles = StyleSheet.create({
   },
   tableCell: {
     flex: 1,
-    padding: 6,
+    padding: 8,
     borderRightWidth: 1,
     borderRightColor: "#d1d5db",
     borderBottomWidth: 1,
     borderBottomColor: "#d1d5db",
+    fontSize: 11,
+    lineHeight: 1.35,
   },
   tableHeaderCell: {
     flex: 1,
-    padding: 6,
+    padding: 8,
     borderRightWidth: 1,
     borderRightColor: "#d1d5db",
     borderBottomWidth: 1,
     borderBottomColor: "#d1d5db",
     fontFamily: "Helvetica-Bold",
-    backgroundColor: "#f3f4f6",
+    fontSize: 11,
+    lineHeight: 1.35,
+    color: "#111827",
+    backgroundColor: "#eef3f8",
+  },
+  link: {
+    color: SECONDARY_BLUE,
+    textDecoration: "underline",
+    fontFamily: "Helvetica-Bold",
   },
   divider: {
     height: 1,
-    marginTop: 8,
-    marginBottom: 12,
+    marginTop: 12,
+    marginBottom: 18,
     backgroundColor: "#d1d5db",
   },
   footer: {
     position: "absolute",
     right: 42,
-    bottom: 28,
+    bottom: 30,
     left: 42,
-    fontSize: 9,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#d1d5db",
+    fontSize: 10,
     color: "#6b7280",
-    textAlign: "right",
+    textAlign: "center",
   },
 });
 
@@ -146,14 +243,15 @@ export async function POST(request: Request) {
     }
 
     const filename = sanitizeFilename(payload.filename);
+    const fechaRevision = resolveFechaRevision(payload.metadata);
     const blocks = parseHtmlToReportBlocks(html);
-    const title = extractReportTitle(blocks, filename);
-    const pdfBuffer = await renderReportPdf(blocks, title);
+    const pdfBuffer = await renderReportPdf(blocks, fechaRevision);
 
     await saveReportRecord({
-      title,
+      title: REPORT_TITLE,
       html,
       filename,
+      fechaRevision,
       metadata: payload.metadata,
     });
 
@@ -179,14 +277,16 @@ function parseHtmlToReportBlocks(html: string): ReportBlock[] {
   const root = parse(html);
   const container = root.querySelector("body") ?? root;
 
-  container.querySelectorAll("script, style, noscript").forEach((node) => node.remove());
+  container
+    .querySelectorAll("script, style, noscript, .pdf-header, .fecha-box, .footer")
+    .forEach((node) => node.remove());
 
   const blocks: ReportBlock[] = [];
   container.childNodes.forEach((node) => appendNodeBlocks(node, blocks));
 
   if (blocks.length === 0) {
-    const text = normalizeText(container.text);
-    if (text) blocks.push({ type: "paragraph", text });
+    const segments = extractInlineSegments(container);
+    if (segments.length > 0) blocks.push({ type: "paragraph", segments });
   }
 
   return blocks;
@@ -195,7 +295,7 @@ function parseHtmlToReportBlocks(html: string): ReportBlock[] {
 function appendNodeBlocks(node: HtmlNode, blocks: ReportBlock[]) {
   if (node.nodeType === NodeType.TEXT_NODE) {
     const text = normalizeText(node.text);
-    if (text) blocks.push({ type: "paragraph", text });
+    if (text) blocks.push({ type: "paragraph", segments: [{ text }] });
     return;
   }
 
@@ -204,34 +304,38 @@ function appendNodeBlocks(node: HtmlNode, blocks: ReportBlock[]) {
   const tagName = node.tagName.toLowerCase();
 
   if (tagName === "h1" || tagName === "h2" || tagName === "h3") {
-    const text = normalizeText(node.text);
-    if (text) {
+    if (tagName === "h1" && isDuplicatedBackendHeader(node.text)) return;
+
+    const segments = extractInlineSegments(node);
+    if (segments.length > 0) {
       blocks.push({
         type: "heading",
         level: Number(tagName.substring(1)) as 1 | 2 | 3,
-        text,
+        segments,
       });
     }
     return;
   }
 
   if (tagName === "h4" || tagName === "h5" || tagName === "h6") {
-    const text = normalizeText(node.text);
-    if (text) blocks.push({ type: "heading", level: 3, text });
+    const segments = extractInlineSegments(node);
+    if (segments.length > 0) blocks.push({ type: "heading", level: 3, segments });
     return;
   }
 
   if (tagName === "p" || tagName === "blockquote" || tagName === "pre") {
-    const text = normalizeText(node.text);
-    if (text) blocks.push({ type: "paragraph", text });
+    if (isDateReviewLine(node.text)) return;
+
+    const segments = extractInlineSegments(node);
+    if (segments.length > 0) blocks.push({ type: "paragraph", segments });
     return;
   }
 
   if (tagName === "ul" || tagName === "ol") {
     const items = node
       .querySelectorAll("li")
-      .map((item) => normalizeText(item.text))
-      .filter(Boolean);
+      .map((item) => extractInlineSegments(item))
+      .filter((item) => item.length > 0);
 
     if (items.length > 0) {
       blocks.push({ type: "list", ordered: tagName === "ol", items });
@@ -245,8 +349,8 @@ function appendNodeBlocks(node: HtmlNode, blocks: ReportBlock[]) {
       .map((row) =>
         row
           .querySelectorAll("th, td")
-          .map((cell) => normalizeText(cell.text))
-          .filter(Boolean),
+          .map((cell) => extractInlineSegments(cell))
+          .filter((cell) => cell.length > 0),
       )
       .filter((row) => row.length > 0);
 
@@ -263,13 +367,86 @@ function appendNodeBlocks(node: HtmlNode, blocks: ReportBlock[]) {
   node.childNodes.forEach((child) => appendNodeBlocks(child, blocks));
 
   if (blocks.length === blockCountBeforeChildren) {
-    const text = normalizeText(node.text);
-    if (text) blocks.push({ type: "paragraph", text });
+    const segments = extractInlineSegments(node);
+    if (segments.length > 0) blocks.push({ type: "paragraph", segments });
   }
 }
 
-function renderReportPdf(blocks: ReportBlock[], title: string): Promise<ArrayBuffer> {
-  const document = React.createElement(ReportPdfDocument, { blocks, title });
+function extractInlineSegments(node: HtmlNode): InlineSegment[] {
+  return normalizeInlineSegments(collectInlineSegments(node));
+}
+
+function collectInlineSegments(node: HtmlNode): InlineSegment[] {
+  if (node.nodeType === NodeType.TEXT_NODE) {
+    return [{ text: node.text }];
+  }
+
+  if (!(node instanceof HTMLElement)) return [];
+
+  const tagName = node.tagName.toLowerCase();
+  if (tagName === "br") return [{ text: "\n" }];
+
+  if (tagName === "a") {
+    const href = node.attributes.href?.trim();
+    const text = normalizeText(node.text);
+
+    if (!text) return [];
+    return href ? [{ text, href }] : [{ text }];
+  }
+
+  return node.childNodes.flatMap((child) => collectInlineSegments(child));
+}
+
+function normalizeInlineSegments(segments: InlineSegment[]): InlineSegment[] {
+  const normalizedSegments: InlineSegment[] = [];
+  let pendingSpace = false;
+
+  for (const segment of segments) {
+    const compactText = segment.text.replace(/\s+/g, " ");
+    const trimmedText = compactText.trim();
+
+    if (!trimmedText) {
+      pendingSpace = normalizedSegments.length > 0;
+      continue;
+    }
+
+    const previousSegment = normalizedSegments.at(-1);
+    const needsSpace =
+      pendingSpace &&
+      previousSegment !== undefined &&
+      !previousSegment.text.endsWith(" ") &&
+      !trimmedText.startsWith(".");
+    const text = `${needsSpace ? " " : ""}${trimmedText}`;
+
+    if (previousSegment !== undefined && previousSegment.href === segment.href) {
+      previousSegment.text += text;
+    } else {
+      normalizedSegments.push(segment.href ? { text, href: segment.href } : { text });
+    }
+
+    pendingSpace = compactText.endsWith(" ");
+  }
+
+  return normalizedSegments;
+}
+
+function getLogoDataUri(): Promise<string | null> {
+  logoDataUriPromise ??= readFile(LOGO_PUBLIC_PATH)
+    .then((buffer) => `data:image/png;base64,${buffer.toString("base64")}`)
+    .catch((error) => {
+      console.error("No se pudo cargar el logo del encabezado PDF:", error);
+      return null;
+    });
+
+  return logoDataUriPromise;
+}
+
+async function renderReportPdf(
+  blocks: ReportBlock[],
+  fechaRevision: string,
+): Promise<ArrayBuffer> {
+  const logoDataUri = await getLogoDataUri();
+  const document = ReportPdfDocument({ blocks, fechaRevision, logoDataUri });
 
   return pdf(document)
     .toBlob()
@@ -278,15 +455,17 @@ function renderReportPdf(blocks: ReportBlock[], title: string): Promise<ArrayBuf
 
 function ReportPdfDocument({
   blocks,
-  title,
+  fechaRevision,
+  logoDataUri,
 }: {
   blocks: ReportBlock[];
-  title: string;
-}): ReactElement {
+  fechaRevision: string;
+  logoDataUri: string | null;
+}): ReactElement<React.ComponentProps<typeof Document>> {
   return React.createElement(
     Document,
     {
-      title,
+      title: REPORT_TITLE,
       author: "SICOP",
       subject: "Reporte automatico de seguimiento",
       creator: "SICOP",
@@ -295,10 +474,41 @@ function ReportPdfDocument({
     React.createElement(
       Page,
       { size: "A4", style: styles.page, wrap: true },
+      React.createElement(
+        View,
+        { style: styles.header },
+        logoDataUri
+          ? React.createElement(
+              View,
+              { style: styles.headerLogoBox },
+              React.createElement(Image, {
+                src: logoDataUri,
+                style: styles.headerLogo,
+              }),
+            )
+          : null,
+        React.createElement(
+          View,
+          { style: styles.headerCopy },
+          React.createElement(Text, { style: styles.headerTitle }, REPORT_TITLE),
+          React.createElement(Text, { style: styles.headerSubtitle }, REPORT_SUBTITLE),
+        ),
+      ),
+      React.createElement(
+        View,
+        { style: styles.dateBox },
+        React.createElement(
+          Text,
+          { style: styles.dateText },
+          React.createElement(Text, { style: styles.bold }, "Fecha de revisión: "),
+          fechaRevision,
+        ),
+      ),
       ...blocks.map(renderBlock),
       React.createElement(Text, {
         fixed: true,
-        render: ({ pageNumber, totalPages }) => `Pagina ${pageNumber} de ${totalPages}`,
+        render: ({ pageNumber, totalPages }) =>
+          `${REPORT_FOOTER} Pagina ${pageNumber} de ${totalPages}`,
         style: styles.footer,
       }),
     ),
@@ -308,14 +518,18 @@ function ReportPdfDocument({
 function renderBlock(block: ReportBlock, index: number): ReactElement {
   if (block.type === "heading") {
     const style = block.level === 1 ? styles.h1 : block.level === 2 ? styles.h2 : styles.h3;
-    return React.createElement(Text, { key: `heading-${index}`, style }, block.text);
+    return React.createElement(
+      Text,
+      { key: `heading-${index}`, style },
+      ...renderInlineSegments(block.segments, `heading-${index}`),
+    );
   }
 
   if (block.type === "paragraph") {
     return React.createElement(
       Text,
       { key: `paragraph-${index}`, style: styles.paragraph },
-      block.text,
+      ...renderInlineSegments(block.segments, `paragraph-${index}`),
     );
   }
 
@@ -326,13 +540,17 @@ function renderBlock(block: ReportBlock, index: number): ReactElement {
       ...block.items.map((item, itemIndex) =>
         React.createElement(
           View,
-          { key: `list-${index}-${itemIndex}`, style: styles.listItem },
+          { key: `list-${index}-${itemIndex}`, style: styles.listItem, wrap: false },
           React.createElement(
             Text,
             { style: styles.listBullet },
             block.ordered ? `${itemIndex + 1}.` : "-",
           ),
-          React.createElement(Text, { style: styles.listText }, item),
+          React.createElement(
+            Text,
+            { style: styles.listText },
+            ...renderInlineSegments(item, `list-${index}-${itemIndex}`),
+          ),
         ),
       ),
     );
@@ -345,7 +563,7 @@ function renderBlock(block: ReportBlock, index: number): ReactElement {
       ...block.rows.map((row, rowIndex) =>
         React.createElement(
           View,
-          { key: `table-${index}-${rowIndex}`, style: styles.tableRow },
+          { key: `table-${index}-${rowIndex}`, style: styles.tableRow, wrap: false },
           ...row.map((cell, cellIndex) =>
             React.createElement(
               Text,
@@ -353,7 +571,7 @@ function renderBlock(block: ReportBlock, index: number): ReactElement {
                 key: `table-${index}-${rowIndex}-${cellIndex}`,
                 style: rowIndex === 0 ? styles.tableHeaderCell : styles.tableCell,
               },
-              cell,
+              ...renderInlineSegments(cell, `table-${index}-${rowIndex}-${cellIndex}`),
             ),
           ),
         ),
@@ -364,19 +582,52 @@ function renderBlock(block: ReportBlock, index: number): ReactElement {
   return React.createElement(View, { key: `divider-${index}`, style: styles.divider });
 }
 
-function extractReportTitle(blocks: ReportBlock[], filename: string): string {
-  const heading = blocks.find(
-    (block): block is Extract<ReportBlock, { type: "heading" }> => block.type === "heading",
+function renderInlineSegments(segments: InlineSegment[], keyPrefix: string): ReactElement[] {
+  return segments.map((segment, index) => {
+    if (segment.href) {
+      return React.createElement(
+        Link,
+        {
+          key: `${keyPrefix}-link-${index}`,
+          src: segment.href,
+          style: styles.link,
+        },
+        segment.text,
+      );
+    }
+
+    return React.createElement(
+      Text,
+      { key: `${keyPrefix}-text-${index}` },
+      segment.text,
+    );
+  });
+}
+
+function resolveFechaRevision(metadata?: ReportMetadata): string {
+  const metadataDate = normalizeText(metadata?.fecha_revision ?? "");
+  if (metadataDate) return metadataDate;
+
+  return new Date().toLocaleDateString("es-EC", {
+    timeZone: ECUADOR_TIME_ZONE,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function isDuplicatedBackendHeader(value: string): boolean {
+  const text = normalizeText(value).toLowerCase();
+  return (
+    text.includes("reporte automatico") ||
+    text.includes("reporte automático") ||
+    text.includes("proyecto sicop")
   );
+}
 
-  if (heading?.text) return heading.text;
-
-  const filenameTitle = filename
-    .replace(/\.pdf$/i, "")
-    .replace(/[-_]+/g, " ")
-    .trim();
-
-  return filenameTitle || DEFAULT_TITLE;
+function isDateReviewLine(value: string): boolean {
+  const text = normalizeText(value).toLowerCase();
+  return text.startsWith("fecha de revisión:") || text.startsWith("fecha de revision:");
 }
 
 function sanitizeFilename(filename?: string): string {
@@ -397,11 +648,13 @@ async function saveReportRecord({
   title,
   html,
   filename,
+  fechaRevision,
   metadata,
 }: {
   title: string;
   html: string;
   filename: string;
+  fechaRevision: string;
   metadata?: ReportMetadata;
 }) {
   const supabaseUrl = process.env.SUPABASE_URL;
@@ -425,7 +678,7 @@ async function saveReportRecord({
     const { error } = await supabase.from("reportes_seguimiento").insert({
       titulo: title,
       tipo_reporte: "seguimiento",
-      fecha_revision: new Date().toISOString(),
+      fecha_revision: fechaRevision,
       total_tareas: metadata?.total_tareas ?? null,
       tareas_proximas: metadata?.tareas_proximas ?? null,
       tareas_atrasadas: metadata?.tareas_atrasadas ?? null,
