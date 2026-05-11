@@ -37,6 +37,10 @@ export interface ChatPromptMeta {
   intent?: ChatUserIntent;
   /** true si el contexto incluye fragmentos del texto fuente (PDF) recuperados por seccion. */
   documentEvidenceActive?: boolean;
+  /** Numero de tareas incluidas efectivamente en el contexto general. */
+  projectTasksLoaded?: number;
+  /** Total de tareas disponibles en la base para el proyecto. */
+  projectTasksAvailable?: number;
   /** Numero de secciones incluidas en la evidencia documental (por tarea o cruzada). */
   documentEvidenceCount?: number;
   /** Clasificacion de la pregunta respecto al documento fuente. */
@@ -67,6 +71,8 @@ export interface TareaContext {
   titulo: string;
   fase: string;
   descripcion: string;
+  url_tarjeta?: string | null;
+  created_at?: string | null;
 }
 
 export interface RevisionContext {

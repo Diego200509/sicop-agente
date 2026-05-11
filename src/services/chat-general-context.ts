@@ -16,9 +16,10 @@ import {
   assembleGeneralListTaskBlock,
   assembleSingleTaskModelContext,
   formatHistoryBlock,
+  type RevisionFormatLimits,
 } from "@/src/services/chat-context-assembly";
-import { getPhaseMode } from "@/src/lib/fases";
-import type { ChatPromptMeta, ChatUserIntent } from "@/src/types/chat";
+import { FASES_TABLERO, getPhaseMode, normalizePhase } from "@/src/lib/fases";
+import type { ChatPromptMeta, ChatUserIntent, RevisionContext, TareaContext } from "@/src/types/chat";
 
 export type BuiltChatContext = {
   contextText: string;
@@ -30,6 +31,169 @@ export type ChatContextBuildOptions = {
   intent?: ChatUserIntent;
 };
 
+type RevisionPair = {
+  doc: RevisionContext | null;
+  code: RevisionContext | null;
+};
+
+type BuildProjectContextResult = {
+  text: string;
+  anyComparative: boolean;
+};
+
+export function buildProjectContext(params: {
+  tasks: TareaContext[];
+  revMap: Map<string, RevisionPair>;
+  totalTasksAvailable: number;
+  config: ChatGeneralConfig;
+  comparisonLimits: RevisionFormatLimits;
+}): BuildProjectContextResult {
+  const { tasks, revMap, totalTasksAvailable, config, comparisonLimits } = params;
+  const loadedCount = tasks.length;
+  const isPartial = totalTasksAvailable > loadedCount;
+  let anyComparative = false;
+
+  const headerLines = [
+    isPartial
+      ? `Actualmente tengo contexto de ${loadedCount} de ${totalTasksAvailable} tareas disponibles, por lo que el analisis puede ser parcial.`
+      : `El analisis considera las ${loadedCount} tareas registradas del tablero SICOP.`,
+    `Limite configurado para contexto general: ${config.maxTasks} tareas.`,
+    "Las tareas se agrupan por fase y cada bloque conserva un resumen compacto para no excluir tarjetas importantes.",
+  ];
+
+  const phaseSections = FASES_TABLERO.map((phase) => {
+    const phaseTasks = tasks
+      .filter((task) => normalizePhase(task.fase) === phase.key)
+      .sort((a, b) => a.titulo.localeCompare(b.titulo, "es"));
+
+    if (phaseTasks.length === 0) {
+      return `## ${phase.titulo}\n(Sin tareas registradas en esta fase dentro del contexto cargado.)`;
+    }
+
+    const blocks = phaseTasks.map((task) => {
+      const pair = revMap.get(task.id);
+      const doc = pair?.doc ?? null;
+      const phaseMode = getPhaseMode(task.fase);
+      const code = phaseMode === "mixto" ? (pair?.code ?? null) : null;
+      const { text, hadComparativeBlock } = assembleGeneralListTaskBlock({
+        tarea: task,
+        doc,
+        code,
+        maxDesc: config.maxDesc,
+        maxAnalysis: config.maxAnalysis,
+        comparisonLimits,
+      });
+      if (hadComparativeBlock) anyComparative = true;
+
+      return injectProjectTaskMetadata({
+        text,
+        task,
+        doc,
+        code,
+      });
+    });
+
+    return [`## ${phase.titulo}`, ...blocks].join("\n\n");
+  });
+
+  const otherTasks = tasks
+    .filter((task) => !FASES_TABLERO.some((phase) => normalizePhase(task.fase) === phase.key))
+    .sort((a, b) => a.titulo.localeCompare(b.titulo, "es"));
+
+  if (otherTasks.length > 0) {
+    const blocks = otherTasks.map((task) => {
+      const pair = revMap.get(task.id);
+      const doc = pair?.doc ?? null;
+      const phaseMode = getPhaseMode(task.fase);
+      const code = phaseMode === "mixto" ? (pair?.code ?? null) : null;
+      const { text, hadComparativeBlock } = assembleGeneralListTaskBlock({
+        tarea: task,
+        doc,
+        code,
+        maxDesc: config.maxDesc,
+        maxAnalysis: config.maxAnalysis,
+        comparisonLimits,
+      });
+      if (hadComparativeBlock) anyComparative = true;
+
+      return injectProjectTaskMetadata({
+        text,
+        task,
+        doc,
+        code,
+      });
+    });
+
+    phaseSections.push(["## Otras fases", ...blocks].join("\n\n"));
+  }
+
+  return {
+    text: [headerLines.join("\n"), "", ...phaseSections].join("\n"),
+    anyComparative,
+  };
+}
+
+function injectProjectTaskMetadata(params: {
+  text: string;
+  task: TareaContext;
+  doc: RevisionContext | null;
+  code: RevisionContext | null;
+}): string {
+  const { text, task, doc, code } = params;
+  const [heading, ...rest] = text.split("\n");
+  const fechas = extractTaskDates(task.descripcion);
+
+  const metadata = [
+    `ID interno: ${task.id}`,
+    `ID tarjeta: ${task.id_tarea}`,
+    `Titulo: ${task.titulo}`,
+    `Fase: ${task.fase}`,
+    `Fecha de inicio: ${fechas.inicio}`,
+    `Fecha fin: ${fechas.fin}`,
+    `Estado: ${formatTaskEvidenceStatus(task, doc, code)}`,
+    `URL Trello: ${task.url_tarjeta?.trim() || "N/D"}`,
+  ];
+
+  return [heading, ...metadata, ...rest].join("\n");
+}
+
+function formatTaskEvidenceStatus(
+  task: TareaContext,
+  doc: RevisionContext | null,
+  code: RevisionContext | null,
+): string {
+  const phaseMode = getPhaseMode(task.fase);
+  const docStatus = doc ? "documental completo" : "documental pendiente";
+  const codeStatus =
+    phaseMode === "mixto"
+      ? code
+        ? "codigo completo"
+        : "codigo pendiente"
+      : "codigo no aplica por fase";
+
+  return `${docStatus}; ${codeStatus}`;
+}
+
+function extractTaskDates(description: string): { inicio: string; fin: string } {
+  return {
+    inicio: extractDateByLabels(description, ["fecha de inicio", "fecha inicio", "inicio"]),
+    fin: extractDateByLabels(description, ["fecha fin", "fecha de fin", "fecha final", "fin"]),
+  };
+}
+
+function extractDateByLabels(description: string, labels: string[]): string {
+  for (const label of labels) {
+    const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const match = description.match(
+      new RegExp(`${escapedLabel}\\s*[:\\-]\\s*([^\\n|;,]+)`, "i"),
+    );
+    const value = match?.[1]?.trim();
+    if (value) return value;
+  }
+
+  return "N/D";
+}
+
 export async function buildGeneralContext(
   tareasRepo: TareasRepository,
   revisionesRepo: RevisionesRepository,
@@ -37,7 +201,10 @@ export async function buildGeneralContext(
   config: ChatGeneralConfig = getChatGeneralConfig(),
   options?: ChatContextBuildOptions,
 ): Promise<BuiltChatContext> {
-  const tareas = await tareasRepo.getLatestForGeneralChat(config.maxTasks);
+  const [tareas, totalTareasDisponibles] = await Promise.all([
+    tareasRepo.getLatestForGeneralChat(config.maxTasks),
+    tareasRepo.countAllForGeneralChat(),
+  ]);
   const ids = tareas.map((t) => t.id);
   const revMap = await revisionesRepo.getLatestDocAndCodeForTareas(ids);
   const history = await chatRepo.getLastMessagesForContext(null, 6);
@@ -49,28 +216,17 @@ export async function buildGeneralContext(
     maxCodeAnalysis: 450,
   };
 
-  let anyComparative = false;
-  const bloquesTareas = tareas.map((t) => {
-    const pair = revMap.get(t.id);
-    const doc = pair?.doc ?? null;
-    const phaseMode = getPhaseMode(t.fase);
-    const code = phaseMode === "mixto" ? (pair?.code ?? null) : null;
-    const { text, hadComparativeBlock } = assembleGeneralListTaskBlock({
-      tarea: t,
-      doc,
-      code,
-      maxDesc: config.maxDesc,
-      maxAnalysis: config.maxAnalysis,
-      comparisonLimits,
-    });
-    if (hadComparativeBlock) anyComparative = true;
-    return text;
+  const projectContext = buildProjectContext({
+    tasks: tareas,
+    revMap,
+    totalTasksAvailable: totalTareasDisponibles,
+    config,
+    comparisonLimits,
   });
 
-  const maxLabel = Math.min(config.maxTasks, 25);
   let contextText = [
-    `## Tareas recientes para contexto general (max ${maxLabel})`,
-    bloquesTareas.length ? bloquesTareas.join("\n\n") : "(No hay tareas)",
+    "## Contexto completo del proyecto SICOP",
+    projectContext.text,
     "",
     "## Ultimos mensajes del chat general (max 6)",
     formatHistoryBlock(history, 1500),
@@ -115,8 +271,10 @@ export async function buildGeneralContext(
 
   const promptMeta: ChatPromptMeta = {
     phaseMode: null,
-    comparativeActive: anyComparative,
+    comparativeActive: projectContext.anyComparative,
     generalBroad: true,
+    projectTasksLoaded: tareas.length,
+    projectTasksAvailable: totalTareasDisponibles,
     documentEvidenceActive,
     documentEvidenceCount,
     ...(crossPrimaryCitation

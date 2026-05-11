@@ -8,7 +8,7 @@ export class TareasRepository {
   async getByUuid(id: string): Promise<TareaContext | null> {
     const { data, error } = await this.supabase
       .from("tareas")
-      .select("id,id_tarea,titulo,fase,descripcion")
+      .select("id,id_tarea,titulo,fase,descripcion,url_tarjeta,created_at")
       .eq("id", id)
       .maybeSingle();
 
@@ -58,15 +58,25 @@ export class TareasRepository {
   }
 
   async getLatestForGeneralChat(limit: number): Promise<TareaContext[]> {
-    const safe = Math.min(50, Math.max(1, Math.floor(limit)));
+    const safe = Math.min(100, Math.max(1, Math.floor(limit)));
     const { data, error } = await this.supabase
       .from("tareas")
-      .select("id,id_tarea,titulo,fase,descripcion")
+      .select("id,id_tarea,titulo,fase,descripcion,url_tarjeta,created_at")
       .order("updated_at", { ascending: false })
       .limit(safe);
 
     if (error) throw new Error(`Error listando tareas recientes: ${error.message}`);
     return (data ?? []) as TareaContext[];
+  }
+
+  async countAllForGeneralChat(): Promise<number> {
+    const { count, error } = await this.supabase.from("tareas").select("id", {
+      count: "exact",
+      head: true,
+    });
+
+    if (error) throw new Error(`Error contando tareas para chat general: ${error.message}`);
+    return count ?? 0;
   }
 
   /**
@@ -76,7 +86,7 @@ export class TareasRepository {
     const safe = Math.min(500, Math.max(1, Math.floor(limit)));
     const { data, error } = await this.supabase
       .from("tareas")
-      .select("id,id_tarea,titulo,fase,descripcion")
+      .select("id,id_tarea,titulo,fase,descripcion,url_tarjeta,created_at")
       .order("updated_at", { ascending: false })
       .limit(safe);
 

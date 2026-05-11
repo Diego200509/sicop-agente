@@ -404,7 +404,7 @@ export function ChatPanel({ tareaId = null, title = "Asistente SICOP", className
       <div className="shrink-0">
         <h3 className="text-base font-semibold leading-tight sm:text-lg">{title}</h3>
         <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-          Pregunta sobre tareas y revisiones. El contexto enviado al modelo es acotado.
+          Pregunta sobre tareas y revisiones. El contexto general usa las tareas disponibles del proyecto.
         </p>
       </div>
 

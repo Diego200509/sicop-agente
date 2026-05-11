@@ -17,7 +17,7 @@ export type ChatGeneralConfig = {
 
 export function getChatGeneralConfig(): ChatGeneralConfig {
   return {
-    maxTasks: parsePositiveInt(process.env.CHAT_GENERAL_MAX_TASKS, 10, 3, 25),
+    maxTasks: parsePositiveInt(process.env.CHAT_GENERAL_MAX_TASKS, 30, 3, 100),
     maxDesc: parsePositiveInt(process.env.CHAT_GENERAL_MAX_DESC, 1200, 200, 8000),
     maxAnalysis: parsePositiveInt(process.env.CHAT_GENERAL_MAX_ANALYSIS, 900, 200, 12000),
     matchingPool: parsePositiveInt(process.env.CHAT_GENERAL_MATCHING_POOL, 150, 20, 500),

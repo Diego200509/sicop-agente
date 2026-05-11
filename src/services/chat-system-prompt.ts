@@ -147,10 +147,18 @@ function appendScopeRulesAnalisis(meta: ChatPromptMeta): string[] {
   const lines: string[] = [];
 
   if (meta.generalBroad) {
+    const loaded = meta.projectTasksLoaded ?? 0;
+    const available = meta.projectTasksAvailable ?? loaded;
+    const scopeLine =
+      available > loaded
+        ? `Actualmente tengo contexto de ${loaded} de ${available} tareas disponibles, por lo que el analisis puede ser parcial.`
+        : `El analisis considera las ${loaded} tareas registradas del tablero SICOP.`;
+
     lines.push(
       "",
       "## Contexto general (varias tareas)",
       "El contexto lista varias tareas: cada bloque indica si la tarea es documental (sin datos de codigo) o mixta.",
+      `Incluye esta aclaracion de alcance en el Resumen cuando la pregunta sea general del proyecto: "${scopeLine}"`,
       "No compares documentacion con codigo para una tarea marcada como documental o cuando el bloque no incluya revision de codigo.",
       "Si el contexto incluye un subtitulo 'Modo comparativo documentacion vs codigo' para una tarea, debes integrar ese analisis comparativo en Resumen, Cumplimiento, Observaciones, Riesgos y Recomendacion cuando la pregunta lo requiera.",
     );
@@ -200,10 +208,18 @@ function appendScopeRulesConsulta(meta: ChatPromptMeta): string[] {
   const lines: string[] = [];
 
   if (meta.generalBroad) {
+    const loaded = meta.projectTasksLoaded ?? 0;
+    const available = meta.projectTasksAvailable ?? loaded;
+    const scopeLine =
+      available > loaded
+        ? `Actualmente tengo contexto de ${loaded} de ${available} tareas disponibles, por lo que el analisis puede ser parcial.`
+        : `El analisis considera las ${loaded} tareas registradas del tablero SICOP.`;
+
     lines.push(
       "",
       "## Alcance (varias tareas)",
       "Varias tareas aparecen en el contexto; respeta el modo documental o mixto de cada bloque.",
+      `Incluye esta aclaracion de alcance cuando la pregunta sea general del proyecto: "${scopeLine}"`,
       "No asumas datos de codigo o PR para tareas en modo documental.",
       "Si un bloque incluye 'Modo comparativo documentacion vs codigo', puedes contrastar documentacion e implementacion solo para esa tarea y solo con la evidencia mostrada.",
     );
