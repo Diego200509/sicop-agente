@@ -20,12 +20,16 @@ export const dynamic = "force-dynamic";
 
 type ReportMetadata = {
   total_tareas?: number;
+  tareas_completadas?: number;
   tareas_proximas?: number;
   tareas_atrasadas?: number;
   tareas_sin_fecha?: number;
   tareas_en_plazo?: number;
   enviado_a?: string;
+  destinatarios?: string;
+  asunto?: string;
   fecha_revision?: string;
+  [key: string]: unknown;
 };
 
 type GeneratePdfPayload = {
@@ -47,6 +51,8 @@ type ReportBlock =
   | { type: "divider" };
 
 const DEFAULT_FILENAME = "reporte-seguimiento-sicop.pdf";
+const STORAGE_BUCKET = "reportes-pdf";
+const REPORT_RECORD_TITLE = "Reporte automático de seguimiento SICOP";
 const REPORT_TITLE = "Reporte Automático - Proyecto SICOP";
 const REPORT_SUBTITLE = "Agente autónomo de seguimiento del tablero Trello";
 const REPORT_FOOTER = "Reporte generado automáticamente por el agente autónomo SICOP.";
@@ -237,7 +243,7 @@ export async function POST(request: Request) {
 
     if (!html) {
       return NextResponse.json(
-        { error: "El contenido HTML del reporte es obligatorio" },
+        { error: "El HTML del reporte es obligatorio" },
         { status: 400 },
       );
     }
@@ -247,12 +253,13 @@ export async function POST(request: Request) {
     const blocks = parseHtmlToReportBlocks(html);
     const pdfBuffer = await renderReportPdf(blocks, fechaRevision);
 
-    await saveReportRecord({
-      title: REPORT_TITLE,
+    await persistGeneratedReport({
+      title: REPORT_RECORD_TITLE,
       html,
       filename,
       fechaRevision,
       metadata: payload.metadata,
+      pdfBuffer,
     });
 
     return new Response(pdfBuffer, {
@@ -644,50 +651,89 @@ function normalizeText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
-async function saveReportRecord({
+async function persistGeneratedReport({
   title,
   html,
   filename,
   fechaRevision,
   metadata,
+  pdfBuffer,
 }: {
   title: string;
   html: string;
   filename: string;
   fechaRevision: string;
   metadata?: ReportMetadata;
+  pdfBuffer: ArrayBuffer;
 }) {
-  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !serviceRoleKey) {
     console.warn(
-      "No se registro el reporte en Supabase: faltan SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY.",
+      "No se subio ni registro el reporte en Supabase: falta NEXT_PUBLIC_SUPABASE_URL/SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY. La service role key es necesaria en backend para subir archivos e insertar sin bloqueos de RLS.",
     );
     return;
   }
 
+  const supabase = createClient(supabaseUrl, serviceRoleKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+  const now = new Date();
+  const storagePath = buildStoragePath();
+  let archivoUrl: string | null = null;
+  let archivoPath: string | null = null;
+  let errorMensaje: string | null = null;
+
   try {
-    const supabase = createClient(supabaseUrl, serviceRoleKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    });
+    const { error: uploadError } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .upload(storagePath, pdfBuffer, {
+        contentType: "application/pdf",
+        upsert: false,
+      });
+
+    if (uploadError) {
+      errorMensaje = `Error al subir PDF a Supabase Storage: ${uploadError.message}`;
+      console.error(errorMensaje, uploadError);
+    } else {
+      archivoPath = storagePath;
+      const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(storagePath);
+      archivoUrl = data.publicUrl;
+    }
+  } catch (error) {
+    errorMensaje = formatErrorMessage("Error inesperado al subir PDF a Supabase Storage", error);
+    console.error(errorMensaje, error);
+  }
+
+  try {
+    const destinatarios = getMetadataString(metadata, "destinatarios") ?? getMetadataString(metadata, "enviado_a");
 
     const { error } = await supabase.from("reportes_seguimiento").insert({
       titulo: title,
-      tipo_reporte: "seguimiento",
+      tipo_reporte: "seguimiento_autonomo",
       fecha_revision: fechaRevision,
-      total_tareas: metadata?.total_tareas ?? null,
-      tareas_proximas: metadata?.tareas_proximas ?? null,
-      tareas_atrasadas: metadata?.tareas_atrasadas ?? null,
-      tareas_sin_fecha: metadata?.tareas_sin_fecha ?? null,
-      tareas_en_plazo: metadata?.tareas_en_plazo ?? null,
+      total_tareas: getMetadataNumber(metadata, "total_tareas"),
+      tareas_completadas: getMetadataNumber(metadata, "tareas_completadas"),
+      tareas_proximas: getMetadataNumber(metadata, "tareas_proximas"),
+      tareas_atrasadas: getMetadataNumber(metadata, "tareas_atrasadas"),
+      tareas_sin_fecha: getMetadataNumber(metadata, "tareas_sin_fecha"),
+      tareas_en_plazo: getMetadataNumber(metadata, "tareas_en_plazo"),
       html_reporte: html,
+      mensaje_html: html,
       archivo_nombre: filename,
-      enviado_a: metadata?.enviado_a ?? null,
+      archivo_url: archivoUrl,
+      archivo_path: archivoPath,
+      enviado_a: destinatarios,
+      destinatarios,
+      asunto: getMetadataString(metadata, "asunto"),
+      metadata: metadata ?? {},
       estado: "generado",
+      enviado_en: now.toISOString(),
+      error_mensaje: errorMensaje,
     });
 
     if (error) {
@@ -696,4 +742,32 @@ async function saveReportRecord({
   } catch (error) {
     console.error("Error inesperado al guardar el reporte en Supabase:", error);
   }
+}
+
+function buildStoragePath(): string {
+  return `reportes/reporte-seguimiento-sicop-${Date.now()}.pdf`;
+}
+
+function getMetadataNumber(metadata: ReportMetadata | undefined, key: keyof ReportMetadata): number {
+  const value = metadata?.[key];
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const numericValue = Number(value);
+    if (Number.isFinite(numericValue)) return numericValue;
+  }
+
+  return 0;
+}
+
+function getMetadataString(metadata: ReportMetadata | undefined, key: keyof ReportMetadata): string | null {
+  const value = metadata?.[key];
+  if (typeof value !== "string") return null;
+
+  const text = normalizeText(value);
+  return text ? text : null;
+}
+
+function formatErrorMessage(prefix: string, error: unknown): string {
+  if (error instanceof Error) return `${prefix}: ${error.message}`;
+  return prefix;
 }
