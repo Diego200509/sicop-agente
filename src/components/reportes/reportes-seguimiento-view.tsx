@@ -527,10 +527,45 @@ function ReporteDetalleModal({
 
           {activeTab === "html" ? (
             html ? (
-              <div
-                className="max-h-[700px] overflow-auto rounded-lg border border-zinc-200 bg-white p-4 text-sm dark:border-zinc-800 dark:bg-zinc-950"
-                dangerouslySetInnerHTML={{ __html: html }}
-              />
+              <>
+                <style>{`
+                  .report-html-preview {
+                    color: #222222;
+                    color-scheme: light;
+                  }
+
+                  .report-html-preview :where(div, section, article, main, body) {
+                    color: inherit;
+                  }
+
+                  .report-html-preview a {
+                    color: #1d4ed8;
+                    text-decoration: underline;
+                    text-underline-offset: 2px;
+                  }
+
+                  .report-html-preview table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    color: #2b2b2b;
+                  }
+
+                  .report-html-preview th {
+                    color: #222222;
+                    font-weight: 700;
+                  }
+
+                  .report-html-preview td,
+                  .report-html-preview th {
+                    padding: 8px 10px;
+                    vertical-align: top;
+                  }
+                `}</style>
+                <div
+                  className="report-html-preview max-h-[700px] overflow-auto rounded-lg border border-zinc-200 bg-zinc-100 p-4 text-sm shadow-inner dark:border-zinc-800"
+                  dangerouslySetInnerHTML={{ __html: html }}
+                />
+              </>
             ) : (
               <EmptyState icon={Mail} title="No hay HTML registrado para este reporte." />
             )
