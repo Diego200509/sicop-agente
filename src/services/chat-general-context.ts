@@ -533,7 +533,7 @@ export async function buildGeneralContext(
   options?: ChatContextBuildOptions,
 ): Promise<BuiltChatContext> {
   const [tareas, totalTareasDisponibles] = await Promise.all([
-    tareasRepo.getLatestForGeneralChat(config.maxTasks),
+    tareasRepo.getLatestReviewedForGeneralChat(config.maxTasks),
     tareasRepo.countAllForGeneralChat(),
   ]);
   const ids = tareas.map((t) => t.id);

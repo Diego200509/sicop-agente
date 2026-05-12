@@ -2,13 +2,16 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { TareaContext } from "@/src/types/chat";
 
+const TAREA_CONTEXT_SELECT =
+  "id,id_tarea,titulo,fase,descripcion,url_tarjeta,inicio,fin,completado,estado,created_at";
+
 export class TareasRepository {
   constructor(private readonly supabase: SupabaseClient) {}
 
   async getByUuid(id: string): Promise<TareaContext | null> {
     const { data, error } = await this.supabase
       .from("tareas")
-      .select("id,id_tarea,titulo,fase,descripcion,url_tarjeta,inicio,fin,completado,estado,created_at")
+      .select(TAREA_CONTEXT_SELECT)
       .eq("id", id)
       .maybeSingle();
 
@@ -58,15 +61,57 @@ export class TareasRepository {
   }
 
   async getLatestForGeneralChat(limit: number): Promise<TareaContext[]> {
-    const safe = Math.min(100, Math.max(1, Math.floor(limit)));
-    const { data, error } = await this.supabase
-      .from("tareas")
-      .select("id,id_tarea,titulo,fase,descripcion,url_tarjeta,inicio,fin,completado,estado,created_at")
-      .order("updated_at", { ascending: false })
-      .limit(safe);
+    return this.getLatestReviewedForGeneralChat(limit);
+  }
 
-    if (error) throw new Error(`Error listando tareas recientes: ${error.message}`);
-    return (data ?? []) as TareaContext[];
+  async getLatestReviewedForGeneralChat(limit: number): Promise<TareaContext[]> {
+    const safe = Math.min(100, Math.max(1, Math.floor(limit)));
+    const revisionScanLimit = Math.min(500, safe * 5);
+
+    const { data: revisionesData, error: revisionesError } = await this.supabase
+      .from("revisiones")
+      .select("tarea_id,fecha_revision")
+      .order("fecha_revision", { ascending: false })
+      .limit(revisionScanLimit);
+
+    if (revisionesError) {
+      throw new Error(`Error listando tareas por revision reciente: ${revisionesError.message}`);
+    }
+
+    const reviewedIds: string[] = [];
+    const seen = new Set<string>();
+
+    for (const revision of revisionesData ?? []) {
+      const tareaId = revision.tarea_id as string | null | undefined;
+      if (!tareaId || seen.has(tareaId)) continue;
+
+      seen.add(tareaId);
+      reviewedIds.push(tareaId);
+      if (reviewedIds.length >= safe) break;
+    }
+
+    const reviewedTasks = reviewedIds.length > 0 ? await this.getTareasByIds(reviewedIds) : [];
+
+    if (reviewedTasks.length >= safe) {
+      return reviewedTasks.slice(0, safe);
+    }
+
+    const remaining = safe - reviewedTasks.length;
+    const { data: fallbackData, error: fallbackError } = await this.supabase
+      .from("tareas")
+      .select(TAREA_CONTEXT_SELECT)
+      .order("updated_at", { ascending: false })
+      .limit(safe + reviewedIds.length);
+
+    if (fallbackError) {
+      throw new Error(`Error listando tareas recientes como respaldo: ${fallbackError.message}`);
+    }
+
+    const fallbackTasks = ((fallbackData ?? []) as TareaContext[])
+      .filter((task) => !seen.has(task.id))
+      .slice(0, remaining);
+
+    return [...reviewedTasks, ...fallbackTasks];
   }
 
   async countAllForGeneralChat(): Promise<number> {
@@ -83,14 +128,18 @@ export class TareasRepository {
    * Lista acotada para resolver menciones de tarea en el chat general (titulos e ids).
    */
   async listForMatching(limit: number): Promise<TareaContext[]> {
-    const safe = Math.min(500, Math.max(1, Math.floor(limit)));
+    return this.getLatestReviewedForGeneralChat(Math.min(500, Math.max(1, Math.floor(limit))));
+  }
+
+  private async getTareasByIds(ids: string[]): Promise<TareaContext[]> {
     const { data, error } = await this.supabase
       .from("tareas")
-      .select("id,id_tarea,titulo,fase,descripcion,url_tarjeta,inicio,fin,completado,estado,created_at")
-      .order("updated_at", { ascending: false })
-      .limit(safe);
+      .select(TAREA_CONTEXT_SELECT)
+      .in("id", ids);
 
-    if (error) throw new Error(`Error listando tareas para coincidencia: ${error.message}`);
-    return (data ?? []) as TareaContext[];
+    if (error) throw new Error(`Error obteniendo tareas revisadas: ${error.message}`);
+
+    const taskMap = new Map(((data ?? []) as TareaContext[]).map((task) => [task.id, task]));
+    return ids.map((id) => taskMap.get(id)).filter((task): task is TareaContext => task != null);
   }
 }
