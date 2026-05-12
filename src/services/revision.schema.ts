@@ -9,7 +9,7 @@ const baseSchema = z.object({
   url_tarjeta: z.string().optional().nullable(),
   inicio: z.string().optional().nullable(),
   fin: z.string().optional().nullable(),
-  completado: z.boolean().optional(),
+  completado: z.boolean().optional().nullable(),
   estado: z.enum(["Cumplida", "Pendiente"]).optional().nullable(),
   pr_number: z.string().optional().nullable(),
   pr_title: z.string().optional().nullable(),

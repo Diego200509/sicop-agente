@@ -12,6 +12,10 @@ import type { EstadoTarea, RevisionPayload } from "@/src/types/revision";
 type TareaRecord = {
   id: string;
   id_tarea: string;
+  inicio?: string | null;
+  fin?: string | null;
+  completado?: boolean | null;
+  estado?: EstadoTarea | null;
 };
 
 type TareaRowForMerge = TareaRecord & {
@@ -30,7 +34,7 @@ export type UpsertTareaInput = {
   url_tarjeta?: string | null;
   inicio?: string | null;
   fin?: string | null;
-  completado?: boolean;
+  completado?: boolean | null;
   estado?: EstadoTarea | null;
   mergeKey?: string;
 };
@@ -56,6 +60,7 @@ type PostgrestLikeError = {
 };
 
 export interface RevisionRepository {
+  findTareaByMergeKey(mergeKey: string): Promise<TareaRecord | null>;
   findTareaByExternalId(idTarea: string): Promise<TareaRecord | null>;
   findTareaByExternalIdOrUrlField(token: string): Promise<TareaRecord | null>;
   findTareaByTechnicalIdAndFase(technicalId: string, fase: string): Promise<TareaRecord | null>;
@@ -65,7 +70,7 @@ export interface RevisionRepository {
     descripcion?: string | null,
   ): Promise<TareaRecord | null>;
   upsertTarea(input: UpsertTareaInput): Promise<TareaRecord>;
-  createRevision(input: NewRevisionInput): Promise<void>;
+  createRevision(input: NewRevisionInput): Promise<string>;
 }
 
 function isUniqueViolation(error: { code?: string; message?: string } | null): boolean {
@@ -115,10 +120,10 @@ export function validateRevisionInputForInsert(input: NewRevisionInput): void {
 export class SupabaseRevisionRepository implements RevisionRepository {
   constructor(private readonly supabase: SupabaseClient) {}
 
-  private async findTareaByMergeKey(mergeKey: string): Promise<TareaRecord | null> {
+  async findTareaByMergeKey(mergeKey: string): Promise<TareaRecord | null> {
     const { data, error } = await this.supabase
       .from("tareas")
-      .select("id, id_tarea")
+      .select("id, id_tarea, inicio, fin, completado, estado")
       .eq("merge_key", mergeKey)
       .order("created_at", { ascending: true })
       .limit(1)
@@ -141,7 +146,7 @@ export class SupabaseRevisionRepository implements RevisionRepository {
 
     const { data: rowBefore, error: beforeErr } = await this.supabase
       .from("tareas")
-      .select("url_tarjeta")
+      .select("url_tarjeta, inicio, fin, completado, estado")
       .eq("id", rowId)
       .maybeSingle();
 
@@ -160,10 +165,10 @@ export class SupabaseRevisionRepository implements RevisionRepository {
       titulo: input.titulo,
       fase: input.fase,
       descripcion: input.descripcion,
-      inicio: input.inicio ?? null,
-      fin: input.fin ?? null,
-      completado: input.completado ?? false,
-      estado: input.estado ?? "Pendiente",
+      inicio: input.inicio ?? rowBefore?.inicio ?? null,
+      fin: input.fin ?? rowBefore?.fin ?? null,
+      completado: input.completado ?? rowBefore?.completado ?? false,
+      estado: input.estado ?? rowBefore?.estado ?? "Pendiente",
       merge_key: mergeKey,
       updated_at: updatedAt,
       url_tarjeta: chooseBestUrlTarjeta(
@@ -180,7 +185,7 @@ export class SupabaseRevisionRepository implements RevisionRepository {
       .from("tareas")
       .update(patch)
       .eq("id", rowId)
-      .select("id, id_tarea")
+      .select("id, id_tarea, inicio, fin, completado, estado")
       .single();
 
     if (error || !data) {
@@ -195,7 +200,7 @@ export class SupabaseRevisionRepository implements RevisionRepository {
   async findTareaByExternalId(idTarea: string): Promise<TareaRecord | null> {
     const { data, error } = await this.supabase
       .from("tareas")
-      .select("id, id_tarea")
+      .select("id, id_tarea, inicio, fin, completado, estado")
       .eq("id_tarea", idTarea)
       .maybeSingle();
 
@@ -215,7 +220,7 @@ export class SupabaseRevisionRepository implements RevisionRepository {
 
     const { data, error } = await this.supabase
       .from("tareas")
-      .select("id, id_tarea")
+      .select("id, id_tarea, inicio, fin, completado, estado")
       .eq("url_tarjeta", t)
       .order("created_at", { ascending: true })
       .limit(1)
@@ -240,7 +245,7 @@ export class SupabaseRevisionRepository implements RevisionRepository {
 
     const { data, error } = await this.supabase
       .from("tareas")
-      .select("id, id_tarea, titulo, fase, descripcion, created_at")
+      .select("id, id_tarea, titulo, fase, descripcion, created_at, inicio, fin, completado, estado")
       .ilike("descripcion", pattern);
 
     if (error) {
@@ -281,7 +286,7 @@ export class SupabaseRevisionRepository implements RevisionRepository {
 
     const { data, error } = await this.supabase
       .from("tareas")
-      .select("id, id_tarea, titulo, fase, descripcion, updated_at, created_at")
+      .select("id, id_tarea, titulo, fase, descripcion, updated_at, created_at, inicio, fin, completado, estado")
       .order("updated_at", { ascending: false })
       .limit(800);
 
@@ -363,7 +368,7 @@ export class SupabaseRevisionRepository implements RevisionRepository {
         merge_key: mergeKey,
         updated_at: updatedAt,
       })
-      .select("id, id_tarea")
+      .select("id, id_tarea, inicio, fin, completado, estado")
       .single();
 
     if (error && isUniqueViolation(error)) {
@@ -394,26 +399,37 @@ export class SupabaseRevisionRepository implements RevisionRepository {
     return data as TareaRecord;
   }
 
-  async createRevision(input: NewRevisionInput): Promise<void> {
+  async createRevision(input: NewRevisionInput): Promise<string> {
     validateRevisionInputForInsert(input);
 
-    const { error } = await this.supabase.from("revisiones").insert({
-      tarea_id: input.tarea_id,
-      tipo_revision: input.tipo_revision,
-      texto_pdf: input.texto_pdf ?? null,
-      analisis_documental: input.analisis_documental ?? null,
-      pr_number: input.pr_number ?? null,
-      pr_title: input.pr_title ?? null,
-      repo_owner: input.repo_owner ?? null,
-      repo_name: input.repo_name ?? null,
-      codigo_pr: input.codigo_pr ?? null,
-      analisis_codigo: input.analisis_codigo ?? null,
-      fecha_revision: new Date().toISOString(),
-    });
+    const { data, error } = await this.supabase
+      .from("revisiones")
+      .insert({
+        tarea_id: input.tarea_id,
+        tipo_revision: input.tipo_revision,
+        texto_pdf: input.texto_pdf ?? null,
+        analisis_documental: input.analisis_documental ?? null,
+        pr_number: input.pr_number ?? null,
+        pr_title: input.pr_title ?? null,
+        repo_owner: input.repo_owner ?? null,
+        repo_name: input.repo_name ?? null,
+        codigo_pr: input.codigo_pr ?? null,
+        analisis_codigo: input.analisis_codigo ?? null,
+        fecha_revision: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
 
-    if (error) {
-      throw new Error(formatSupabaseError("Error al crear revision (insert revisiones)", error));
+    if (error || !data) {
+      throw new Error(
+        formatSupabaseError(
+          "Error al crear revision (insert revisiones)",
+          (error ?? { message: "sin fila" }) as PostgrestLikeError,
+        ),
+      );
     }
+
+    return String(data.id);
   }
 }
 

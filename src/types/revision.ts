@@ -10,7 +10,7 @@ interface RevisionPayloadBase {
   url_tarjeta?: string | null;
   inicio?: string | null;
   fin?: string | null;
-  completado?: boolean;
+  completado?: boolean | null;
   estado?: EstadoTarea | null;
   pr_number?: string | null;
   pr_title?: string | null;
