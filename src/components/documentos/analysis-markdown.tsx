@@ -78,17 +78,17 @@ function getMarkdownComponents(compact: boolean) {
     ),
     table: ({ children }: { children?: ReactNode }) => (
       <div className={cn(blockMb, "scrollbar-elegant overflow-x-auto")}>
-        <table className="w-full min-w-[240px] border-collapse border border-zinc-300 text-xs dark:border-zinc-600 sm:text-sm">
+        <table className="w-full min-w-[44rem] border-collapse border border-zinc-300 text-xs dark:border-zinc-600 sm:text-sm [&_td:first-child]:min-w-48 [&_td:first-child]:whitespace-normal [&_th:first-child]:min-w-48">
           {children}
         </table>
       </div>
     ),
     thead: ({ children }: { children?: ReactNode }) => <thead className="bg-zinc-100 dark:bg-zinc-900">{children}</thead>,
     th: ({ children }: { children?: ReactNode }) => (
-      <th className="border border-zinc-300 px-2 py-1 text-left font-semibold dark:border-zinc-600">{children}</th>
+      <th className="whitespace-nowrap border border-zinc-300 px-2.5 py-1.5 text-left font-semibold dark:border-zinc-600">{children}</th>
     ),
     td: ({ children }: { children?: ReactNode }) => (
-      <td className="border border-zinc-300 px-2 py-1 align-top dark:border-zinc-600">{children}</td>
+      <td className="whitespace-nowrap border border-zinc-300 px-2.5 py-1.5 align-top dark:border-zinc-600">{children}</td>
     ),
     tr: ({ children }: { children?: ReactNode }) => <tr>{children}</tr>,
     hr: () => <hr className="my-4 border-zinc-200 dark:border-zinc-700" />,

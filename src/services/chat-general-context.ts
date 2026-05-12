@@ -193,7 +193,12 @@ type TaskOperationalInsight = {
 };
 
 function formatContextDate(value: string | null | undefined): string {
-  return value?.trim() ? value : "No definido";
+  const clean = value?.trim();
+  if (!clean) return "No definido";
+  const isoDate = clean.match(/^\d{4}-\d{2}-\d{2}/)?.[0];
+  if (isoDate) return isoDate;
+  const date = new Date(clean);
+  return Number.isNaN(date.getTime()) ? "No definido" : date.toISOString().slice(0, 10);
 }
 
 function parseTaskDate(value: string | null | undefined): Date | null {
@@ -330,6 +335,7 @@ function taskTableRows(insights: TaskOperationalInsight[]): string[] {
       escapeTableCell(i.task.titulo),
       escapeTableCell(i.task.fase),
       i.status,
+      escapeTableCell(i.inicioLabel),
       escapeTableCell(i.finLabel),
       markdownLink(i.task.url_tarjeta),
     ].join(" | "),
@@ -338,15 +344,15 @@ function taskTableRows(insights: TaskOperationalInsight[]): string[] {
 
 function formatTaskTable(insights: TaskOperationalInsight[]): string {
   return [
-    "Tarea | Fase | Estado | Fecha fin | Enlace",
-    "--- | --- | --- | --- | ---",
+    "Tarea | Fase | Estado | Fecha inicio | Fecha fin | Enlace",
+    "--- | --- | --- | --- | --- | ---",
     ...taskTableRows(insights),
   ].join("\n");
 }
 
 function formatPriorityLine(i: TaskOperationalInsight): string {
   const reasons = i.priorityReasons.length > 0 ? i.priorityReasons.join("; ") : "sin alertas fuertes";
-  return `- ${i.priorityLabel} (${i.priorityScore}): ${i.task.titulo} | Fase: ${i.task.fase} | Estado: ${i.status} | Fin: ${i.finLabel} | Motivos: ${reasons} | Enlace: ${i.task.url_tarjeta?.trim() || "N/D"}`;
+  return `- ${i.priorityLabel} (${i.priorityScore}): ${i.task.titulo} | Fase: ${i.task.fase} | Estado: ${i.status} | Inicio: ${i.inicioLabel} | Fin: ${i.finLabel} | Motivos: ${reasons} | Enlace: ${i.task.url_tarjeta?.trim() || "N/D"}`;
 }
 
 function buildMissingDataBlock(insights: TaskOperationalInsight[]): string {
@@ -363,7 +369,7 @@ function buildMissingDataBlock(insights: TaskOperationalInsight[]): string {
     const rows =
       matches.length === 0
         ? ["- Ninguna."]
-        : matches.map((i) => `- ${i.task.titulo} | Fase: ${i.task.fase} | Estado: ${i.status} | Fin: ${i.finLabel}`);
+        : matches.map((i) => `- ${i.task.titulo} | Fase: ${i.task.fase} | Estado: ${i.status} | Inicio: ${i.inicioLabel} | Fin: ${i.finLabel}`);
     return [`### ${title} (${matches.length})`, ...rows].join("\n");
   });
 
@@ -382,13 +388,14 @@ function buildOverdueBlock(insights: TaskOperationalInsight[]): string {
       ? "No hay tareas vencidas segun la fecha fin registrada."
       : [
           "### Vencidas",
-          "Tarea | Fase | Estado | Fecha fin | Dias atraso | Enlace",
-          "--- | --- | --- | --- | --- | ---",
+          "Tarea | Fase | Estado | Fecha inicio | Fecha fin | Dias atraso | Enlace",
+          "--- | --- | --- | --- | --- | --- | ---",
           ...overdue.map((i) =>
             [
               escapeTableCell(i.task.titulo),
               escapeTableCell(i.task.fase),
               i.status,
+              escapeTableCell(i.inicioLabel),
               escapeTableCell(i.finLabel),
               String(i.daysLate ?? 0),
               markdownLink(i.task.url_tarjeta),
@@ -497,7 +504,7 @@ function buildFocusedContextByQuestionKind(params: {
       ...FASES_TABLERO.map((phase) => {
         const phaseItems = sortedByPhase.filter((i) => normalizePhase(i.task.fase) === phase.key);
         const done = phaseItems.filter((i) => i.completed).length;
-        const rows = phaseItems.length > 0 ? phaseItems.map((i) => `- ${i.task.titulo} | ${i.status} | Fin: ${i.finLabel}`) : ["- Sin tareas."];
+        const rows = phaseItems.length > 0 ? phaseItems.map((i) => `- ${i.task.titulo} | ${i.status} | Inicio: ${i.inicioLabel} | Fin: ${i.finLabel}`) : ["- Sin tareas."];
         return [`### ${phase.titulo}: ${done}/${phaseItems.length} cumplidas`, ...rows].join("\n");
       }),
       "",

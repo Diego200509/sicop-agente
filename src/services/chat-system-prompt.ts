@@ -278,7 +278,8 @@ function appendQuestionKindRules(meta: ChatPromptMeta): string[] {
     return [
       ...common,
       "Tipo detectado: listado de tareas.",
-      "Responde con una tabla Markdown con columnas: Tarea | Fase | Estado | Fecha fin | Enlace.",
+      "Responde con una tabla Markdown con columnas: Tarea | Fase | Estado | Fecha inicio | Fecha fin | Enlace.",
+      "Usa las fechas ya formateadas del contexto; no pegues timestamps ISO completos.",
       "Incluye todas las tareas cargadas en el contexto y conserva enlaces Trello cuando existan.",
       "No agregues analisis largo; despues de la tabla puedes cerrar con una frase breve de alcance si aplica.",
     ];
@@ -309,7 +310,8 @@ function appendQuestionKindRules(meta: ChatPromptMeta): string[] {
       ...common,
       "Tipo detectado: tareas atrasadas.",
       "Ordena por criticidad: vencidas primero, luego pendientes sin fecha fin, luego proximas a vencer si aparecen.",
-      "Usa una tabla Markdown con columnas: Tarea | Fase | Estado | Fecha fin | Criticidad | Motivo | Enlace.",
+      "Usa una tabla Markdown con columnas: Tarea | Fase | Estado | Fecha inicio | Fecha fin | Criticidad | Motivo | Enlace.",
+      "Usa las fechas ya formateadas del contexto; no pegues timestamps ISO completos.",
       "Si no hay tareas vencidas, dilo claramente y menciona pendientes sin fecha fin como riesgo de planificacion.",
     ];
   }
@@ -339,7 +341,8 @@ function appendQuestionKindRules(meta: ChatPromptMeta): string[] {
       ...common,
       "Tipo detectado: ranking de prioridad.",
       "Responde con una tabla Markdown ordenada por prioridad descendente.",
-      "Columnas sugeridas: Prioridad | Tarea | Fase | Estado | Fecha fin | Motivo.",
+      "Columnas sugeridas: Prioridad | Tarea | Fase | Estado | Fecha inicio | Fecha fin | Motivo.",
+      "Usa las fechas ya formateadas del contexto; no pegues timestamps ISO completos.",
       "Explica en una frase que la prioridad se basa en fecha fin, atraso, estado, revisiones faltantes y datos incompletos.",
     ];
   }
