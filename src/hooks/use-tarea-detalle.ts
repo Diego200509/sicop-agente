@@ -9,6 +9,10 @@ type TareaDetalle = {
   fase: string;
   descripcion: string;
   url_tarjeta: string | null;
+  inicio: string | null;
+  fin: string | null;
+  completado: boolean;
+  estado: string;
   estado_documental: "completo" | "pendiente";
   estado_codigo: "completo" | "pendiente" | "no_aplica";
   documental: {

@@ -14,6 +14,8 @@ export class RevisionService {
 
   async procesarRevision(payload: RevisionPayload): Promise<void> {
     const mergeKey = buildMergeKeyPreferTech(payload.titulo, payload.fase, payload.descripcion);
+    const safeCompletado = payload.completado ?? false;
+    const safeEstado = payload.estado ?? (safeCompletado ? "Cumplida" : "Pendiente");
 
     const tarea = await this.revisionRepository.upsertTarea({
       id_tarea: payload.id_tarea,
@@ -21,6 +23,10 @@ export class RevisionService {
       fase: payload.fase,
       descripcion: payload.descripcion,
       url_tarjeta: payload.url_tarjeta ?? null,
+      inicio: payload.inicio ?? null,
+      fin: payload.fin ?? null,
+      completado: safeCompletado,
+      estado: safeEstado,
       mergeKey,
     });
 

@@ -1,4 +1,5 @@
 export type TipoRevision = "documental" | "codigo";
+export type EstadoTarea = "Cumplida" | "Pendiente";
 
 interface RevisionPayloadBase {
   tipo_revision: TipoRevision;
@@ -7,6 +8,10 @@ interface RevisionPayloadBase {
   fase: string;
   descripcion: string;
   url_tarjeta?: string | null;
+  inicio?: string | null;
+  fin?: string | null;
+  completado?: boolean;
+  estado?: EstadoTarea | null;
   pr_number?: string | null;
   pr_title?: string | null;
   repo_owner?: string | null;

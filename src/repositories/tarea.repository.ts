@@ -7,6 +7,10 @@ export type TareaListado = {
   id_tarea: string;
   titulo: string;
   fase: string;
+  inicio: string | null;
+  fin: string | null;
+  completado: boolean;
+  estado: string;
   estado_documental: "completo" | "pendiente";
   estado_codigo: "completo" | "pendiente" | "no_aplica";
   fecha_ultima_revision: string | null;
@@ -21,6 +25,10 @@ export type TareaDetalle = {
   fase: string;
   descripcion: string;
   url_tarjeta: string | null;
+  inicio: string | null;
+  fin: string | null;
+  completado: boolean;
+  estado: string;
   estado_documental: "completo" | "pendiente";
   estado_codigo: "completo" | "pendiente" | "no_aplica";
   documental: {
@@ -72,6 +80,10 @@ type TareaJoinRow = {
   fase: string;
   descripcion: string;
   url_tarjeta: string | null;
+  inicio: string | null;
+  fin: string | null;
+  completado: boolean | null;
+  estado: string | null;
   revisiones: RevisionRow[] | null;
 };
 
@@ -85,7 +97,7 @@ export class TareaRepository {
   async listTareas(search?: string): Promise<TareaListado[]> {
     let query = this.supabase
       .from("tareas")
-      .select("id,id_tarea,titulo,fase,orden,created_at,revisiones(tipo_revision,fecha_revision)");
+      .select("id,id_tarea,titulo,fase,inicio,fin,completado,estado,orden,created_at,revisiones(tipo_revision,fecha_revision)");
 
     if (search) query = query.ilike("titulo", `%${search}%`);
 
@@ -97,6 +109,10 @@ export class TareaRepository {
       id_tarea: string;
       titulo: string;
       fase: string;
+      inicio: string | null;
+      fin: string | null;
+      completado: boolean | null;
+      estado: string | null;
       orden: number | null;
       created_at: string;
       revisiones: Array<{ tipo_revision: "documental" | "codigo"; fecha_revision: string | null }> | null;
@@ -117,6 +133,10 @@ export class TareaRepository {
         id_tarea: row.id_tarea,
         titulo: row.titulo,
         fase: row.fase,
+        inicio: row.inicio ?? null,
+        fin: row.fin ?? null,
+        completado: row.completado ?? false,
+        estado: row.estado ?? "Pendiente",
         estado_documental: hasDocumental ? "completo" : "pendiente",
         estado_codigo: codeRequired ? (hasCodigo ? "completo" : "pendiente") : "no_aplica",
         fecha_ultima_revision: (ultimaRevision as string | undefined) ?? null,
@@ -143,7 +163,7 @@ export class TareaRepository {
 
   async getTareaDetail(idOrIdTarea: string): Promise<TareaDetalle | null> {
     const select =
-      "id,id_tarea,titulo,fase,descripcion,url_tarjeta,revisiones(id,tipo_revision,fecha_revision,texto_pdf,analisis_documental,pr_title,repo_owner,repo_name,codigo_pr,analisis_codigo)";
+      "id,id_tarea,titulo,fase,descripcion,url_tarjeta,inicio,fin,completado,estado,revisiones(id,tipo_revision,fecha_revision,texto_pdf,analisis_documental,pr_title,repo_owner,repo_name,codigo_pr,analisis_codigo)";
 
     const param = idOrIdTarea.trim();
 
@@ -183,6 +203,10 @@ export class TareaRepository {
       fase: tarea.fase,
       descripcion: tarea.descripcion,
       url_tarjeta: tarea.url_tarjeta,
+      inicio: tarea.inicio ?? null,
+      fin: tarea.fin ?? null,
+      completado: tarea.completado ?? false,
+      estado: tarea.estado ?? "Pendiente",
       estado_documental: revisionDocumental ? "completo" : "pendiente",
       estado_codigo: codeRequired ? (revisionCodigo ? "completo" : "pendiente") : "no_aplica",
       documental: {

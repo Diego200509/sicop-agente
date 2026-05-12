@@ -15,6 +15,7 @@ import {
 import {
   assembleGeneralListTaskBlock,
   assembleSingleTaskModelContext,
+  formatTaskOperationalMetadata,
   formatHistoryBlock,
   type RevisionFormatLimits,
 } from "@/src/services/chat-context-assembly";
@@ -141,16 +142,14 @@ function injectProjectTaskMetadata(params: {
 }): string {
   const { text, task, doc, code } = params;
   const [heading, ...rest] = text.split("\n");
-  const fechas = extractTaskDates(task.descripcion);
 
   const metadata = [
     `ID interno: ${task.id}`,
     `ID tarjeta: ${task.id_tarea}`,
     `Titulo: ${task.titulo}`,
     `Fase: ${task.fase}`,
-    `Fecha de inicio: ${fechas.inicio}`,
-    `Fecha fin: ${fechas.fin}`,
-    `Estado: ${formatTaskEvidenceStatus(task, doc, code)}`,
+    ...formatTaskOperationalMetadata(task),
+    `Estado de revisiones: ${formatTaskEvidenceStatus(task, doc, code)}`,
     `URL Trello: ${task.url_tarjeta?.trim() || "N/D"}`,
   ];
 
@@ -172,26 +171,6 @@ function formatTaskEvidenceStatus(
       : "codigo no aplica por fase";
 
   return `${docStatus}; ${codeStatus}`;
-}
-
-function extractTaskDates(description: string): { inicio: string; fin: string } {
-  return {
-    inicio: extractDateByLabels(description, ["fecha de inicio", "fecha inicio", "inicio"]),
-    fin: extractDateByLabels(description, ["fecha fin", "fecha de fin", "fecha final", "fin"]),
-  };
-}
-
-function extractDateByLabels(description: string, labels: string[]): string {
-  for (const label of labels) {
-    const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const match = description.match(
-      new RegExp(`${escapedLabel}\\s*[:\\-]\\s*([^\\n|;,]+)`, "i"),
-    );
-    const value = match?.[1]?.trim();
-    if (value) return value;
-  }
-
-  return "N/D";
 }
 
 export async function buildGeneralContext(

@@ -3,6 +3,8 @@
 import { use } from "react";
 import {
   Braces,
+  CalendarDays,
+  CheckCircle2,
   CircleAlert,
   Code2,
   FileSearch,
@@ -33,6 +35,12 @@ import { requiresCodeReviewByPhase } from "@/src/lib/fases";
 type TareaDetallePageProps = {
   params: Promise<{ id: string }>;
 };
+
+function formatDateTime(value: string | null): string {
+  if (!value) return "No definido";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "No definido" : date.toLocaleString("es-ES");
+}
 
 export default function TareaDetallePage({ params }: TareaDetallePageProps) {
   const { id } = use(params);
@@ -70,6 +78,8 @@ export default function TareaDetallePage({ params }: TareaDetallePageProps) {
 
   const repo = [detalle.codigo.repo_owner, detalle.codigo.repo_name].filter(Boolean).join("/");
   const codeApplies = requiresCodeReviewByPhase(detalle.fase);
+  const estadoOperativo = detalle.completado || detalle.estado === "Cumplida" ? "completo" : "pendiente";
+  const estadoOperativoLabel = estadoOperativo === "completo" ? "Cumplida" : "Pendiente";
 
   return (
     <AppPageShell fillHeight className="gap-4 overflow-hidden">
@@ -97,6 +107,32 @@ export default function TareaDetallePage({ params }: TareaDetallePageProps) {
             >
               <FaseBadge fase={detalle.fase} />
             </DetailBlockRow>
+            <DetailBlockRow
+              icon={CheckCircle2}
+              title="Estado de la tarea"
+              hint="Estado operativo recibido desde Trello."
+              tone={estadoOperativo === "completo" ? "emerald" : "amber"}
+            >
+              <EstadoBadge estado={estadoOperativo} etiqueta={estadoOperativoLabel} />
+            </DetailBlockRow>
+            <DetailBlock
+              icon={CalendarDays}
+              title="Fechas planificadas"
+              hint="Inicio y fin registrados para la tarjeta."
+              tone="sky"
+              dense
+            >
+              <div className="grid gap-2 rounded-lg border border-zinc-200/90 bg-white px-3 py-2.5 text-sm shadow-sm sm:grid-cols-2 dark:border-zinc-700/90 dark:bg-zinc-950/60">
+                <div>
+                  <span className="block text-xs font-semibold uppercase text-zinc-500 dark:text-zinc-400">Inicio</span>
+                  <span className="text-zinc-900 dark:text-zinc-100">{formatDateTime(detalle.inicio)}</span>
+                </div>
+                <div>
+                  <span className="block text-xs font-semibold uppercase text-zinc-500 dark:text-zinc-400">Fin</span>
+                  <span className="text-zinc-900 dark:text-zinc-100">{formatDateTime(detalle.fin)}</span>
+                </div>
+              </div>
+            </DetailBlock>
             <TareaDescripcion text={detalle.descripcion} />
             <DetailBlock
               icon={Link2}

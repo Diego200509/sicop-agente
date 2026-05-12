@@ -133,6 +133,23 @@ export function formatHistoryBlock(
     .join("\n");
 }
 
+function formatTaskDate(value: string | null | undefined): string {
+  return value?.trim() ? value : "No definido";
+}
+
+function formatTaskCompleted(value: boolean | null | undefined): string {
+  return value === true ? "Sí" : "No";
+}
+
+export function formatTaskOperationalMetadata(tarea: TareaContext): string[] {
+  return [
+    `Inicio: ${formatTaskDate(tarea.inicio)}`,
+    `Fin: ${formatTaskDate(tarea.fin)}`,
+    `Estado: ${tarea.estado?.trim() || "Pendiente"}`,
+    `Completado: ${formatTaskCompleted(tarea.completado)}`,
+  ];
+}
+
 export function assembleSingleTaskModelContext(params: {
   variant: TaskContextVariant;
   tarea: TareaContext;
@@ -160,6 +177,8 @@ export function assembleSingleTaskModelContext(params: {
     `ID tarjeta: ${tarea.id_tarea}`,
     `Titulo: ${tarea.titulo}`,
     `Fase: ${tarea.fase}`,
+    ...formatTaskOperationalMetadata(tarea),
+    `URL Trello: ${tarea.url_tarjeta?.trim() || "N/D"}`,
     `Modo de contexto segun fase: ${phaseMode === "mixto" ? "mixto (documental + codigo)" : "documental (solo documentacion)"}`,
     `Descripcion: ${truncateText(tarea.descripcion, maxDesc)}`,
     "",

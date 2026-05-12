@@ -9,6 +9,10 @@ export type TareaTablaItem = {
   id_tarea: string;
   titulo: string;
   fase: string;
+  inicio: string | null;
+  fin: string | null;
+  completado: boolean;
+  estado: string;
   estado_documental: "completo" | "pendiente";
   estado_codigo: "completo" | "pendiente" | "no_aplica";
   fecha_ultima_revision: string | null;
@@ -20,6 +24,20 @@ type TareasTableProps = {
   tareas: TareaTablaItem[];
 };
 
+function formatDate(value: string | null): string {
+  if (!value) return "No definido";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "No definido" : date.toLocaleDateString("es-ES");
+}
+
+function getEstadoOperativo(tarea: Pick<TareaTablaItem, "completado" | "estado">): "completo" | "pendiente" {
+  return tarea.completado || tarea.estado === "Cumplida" ? "completo" : "pendiente";
+}
+
+function getEstadoOperativoLabel(tarea: Pick<TareaTablaItem, "completado" | "estado">): "Cumplida" | "Pendiente" {
+  return getEstadoOperativo(tarea) === "completo" ? "Cumplida" : "Pendiente";
+}
+
 export function TareasTable({ tareas }: TareasTableProps) {
   return (
     <Card className="overflow-hidden p-0">
@@ -29,6 +47,8 @@ export function TareasTable({ tareas }: TareasTableProps) {
           <TableRow>
             <TableHead>Titulo</TableHead>
             <TableHead>Fase</TableHead>
+            <TableHead>Estado</TableHead>
+            <TableHead>Fechas</TableHead>
             <TableHead>Documental</TableHead>
             <TableHead>Codigo</TableHead>
             <TableHead>Ultima revision</TableHead>
@@ -41,6 +61,13 @@ export function TareasTable({ tareas }: TareasTableProps) {
               <TableCell className="font-medium">{tarea.titulo}</TableCell>
               <TableCell>
                 <FaseBadge fase={tarea.fase} />
+              </TableCell>
+              <TableCell>
+                <EstadoBadge estado={getEstadoOperativo(tarea)} etiqueta={getEstadoOperativoLabel(tarea)} />
+              </TableCell>
+              <TableCell className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-300">
+                <div>Inicio: {formatDate(tarea.inicio)}</div>
+                <div>Fin: {formatDate(tarea.fin)}</div>
               </TableCell>
               <TableCell>
                 <EstadoBadge

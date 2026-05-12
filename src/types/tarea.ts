@@ -5,5 +5,9 @@ export interface Tarea {
   fase: string;
   descripcion: string;
   url_tarjeta?: string | null;
+  inicio?: string | null;
+  fin?: string | null;
+  completado?: boolean;
+  estado?: string;
   created_at: string;
 }

@@ -10,6 +10,10 @@ create table if not exists public.tareas (
   fase text not null,
   descripcion text not null,
   url_tarjeta text,
+  inicio timestamptz,
+  fin timestamptz,
+  completado boolean not null default false,
+  estado text not null default 'Pendiente',
   /** Orden manual dentro de la misma fase (tablero Kanban). */
   orden integer,
   /** Dedupe documental/código: misma tarjeta lógica aunque n8n envíe distintos id_tarea (ver tarea-match-key). */
@@ -20,7 +24,8 @@ create table if not exists public.tareas (
   constraint tareas_id_tarea_not_empty check (length(trim(id_tarea)) > 0),
   constraint tareas_titulo_not_empty check (length(trim(titulo)) > 0),
   constraint tareas_fase_not_empty check (length(trim(fase)) > 0),
-  constraint tareas_descripcion_not_empty check (length(trim(descripcion)) > 0)
+  constraint tareas_descripcion_not_empty check (length(trim(descripcion)) > 0),
+  constraint tareas_estado_valido check (estado in ('Cumplida', 'Pendiente'))
 );
 
 create table if not exists public.revisiones (

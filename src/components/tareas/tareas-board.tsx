@@ -100,6 +100,17 @@ function columnTopBorderClass(columnId: string): string {
 const cardHoverMotion =
   "transition-[box-shadow,colors,border-color] duration-200 ease-out hover:shadow-md dark:hover:shadow-lg dark:hover:shadow-black/35";
 
+function formatShortDate(value: string | null): string {
+  if (!value) return "No definido";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "No definido";
+  return date.toLocaleDateString("es-ES", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 async function persistReorder(faseColumnKey: string, items: Array<{ id: string; orden: number }>): Promise<void> {
   const res = await fetch("/api/reordenar-tareas", {
     method: "POST",
@@ -122,6 +133,10 @@ function StaticTareaCard({ tarea }: { tarea: TareaTablaItem }) {
         minute: "2-digit",
       })
     : null;
+  const estadoOperativo = tarea.completado || tarea.estado === "Cumplida" ? "completo" : "pendiente";
+  const estadoOperativoLabel = estadoOperativo === "completo" ? "Cumplida" : "Pendiente";
+  const inicioLabel = formatShortDate(tarea.inicio);
+  const finLabel = formatShortDate(tarea.fin);
 
   return (
     <MotionLink
@@ -138,6 +153,7 @@ function StaticTareaCard({ tarea }: { tarea: TareaTablaItem }) {
         {tarea.titulo}
       </p>
       <div className="mt-2.5 flex flex-wrap gap-1.5">
+        <EstadoBadge estado={estadoOperativo} etiqueta={estadoOperativoLabel} />
         <EstadoBadge
           estado={tarea.estado_documental}
           evidence="documental"
@@ -154,6 +170,10 @@ function StaticTareaCard({ tarea }: { tarea: TareaTablaItem }) {
                 : "Cód pend."
           }
         />
+      </div>
+      <div className="mt-2 grid grid-cols-2 gap-1.5 text-[10px] leading-snug text-zinc-500 dark:text-zinc-400">
+        <span className="truncate">Inicio: {inicioLabel}</span>
+        <span className="truncate">Fin: {finLabel}</span>
       </div>
       {fechaLabel ? (
         <div className="mt-3 flex min-w-0 items-center gap-2 border-t border-zinc-100 pt-2.5 text-[11px] dark:border-zinc-800/80">
@@ -222,6 +242,10 @@ function SortableTareaCard({
         minute: "2-digit",
       })
     : null;
+  const estadoOperativo = tarea.completado || tarea.estado === "Cumplida" ? "completo" : "pendiente";
+  const estadoOperativoLabel = estadoOperativo === "completo" ? "Cumplida" : "Pendiente";
+  const inicioLabel = formatShortDate(tarea.inicio);
+  const finLabel = formatShortDate(tarea.fin);
 
   const openDetalle = useCallback(() => {
     router.push(`/tareas/${tarea.id}`);
@@ -274,6 +298,7 @@ function SortableTareaCard({
           {tarea.titulo}
         </p>
         <div className="mt-2.5 flex flex-wrap gap-1.5">
+          <EstadoBadge estado={estadoOperativo} etiqueta={estadoOperativoLabel} />
           <EstadoBadge
             estado={tarea.estado_documental}
             evidence="documental"
@@ -290,6 +315,10 @@ function SortableTareaCard({
                   : "Cód pend."
             }
           />
+        </div>
+        <div className="mt-2 grid grid-cols-2 gap-1.5 text-[10px] leading-snug text-zinc-500 dark:text-zinc-400">
+          <span className="truncate">Inicio: {inicioLabel}</span>
+          <span className="truncate">Fin: {finLabel}</span>
         </div>
         {fechaLabel ? (
           <div className="mt-3 flex min-w-0 items-center gap-2 border-t border-zinc-100 pt-2.5 text-[11px] dark:border-zinc-800/80">

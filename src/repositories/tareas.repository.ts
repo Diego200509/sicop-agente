@@ -8,7 +8,7 @@ export class TareasRepository {
   async getByUuid(id: string): Promise<TareaContext | null> {
     const { data, error } = await this.supabase
       .from("tareas")
-      .select("id,id_tarea,titulo,fase,descripcion,url_tarjeta,created_at")
+      .select("id,id_tarea,titulo,fase,descripcion,url_tarjeta,inicio,fin,completado,estado,created_at")
       .eq("id", id)
       .maybeSingle();
 
@@ -61,7 +61,7 @@ export class TareasRepository {
     const safe = Math.min(100, Math.max(1, Math.floor(limit)));
     const { data, error } = await this.supabase
       .from("tareas")
-      .select("id,id_tarea,titulo,fase,descripcion,url_tarjeta,created_at")
+      .select("id,id_tarea,titulo,fase,descripcion,url_tarjeta,inicio,fin,completado,estado,created_at")
       .order("updated_at", { ascending: false })
       .limit(safe);
 
@@ -86,7 +86,7 @@ export class TareasRepository {
     const safe = Math.min(500, Math.max(1, Math.floor(limit)));
     const { data, error } = await this.supabase
       .from("tareas")
-      .select("id,id_tarea,titulo,fase,descripcion,url_tarjeta,created_at")
+      .select("id,id_tarea,titulo,fase,descripcion,url_tarjeta,inicio,fin,completado,estado,created_at")
       .order("updated_at", { ascending: false })
       .limit(safe);
 

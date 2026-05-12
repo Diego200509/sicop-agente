@@ -7,7 +7,7 @@ import {
   normalizeForTareaMerge,
 } from "@/src/lib/tarea-match-key";
 import { chooseBestUrlTarjeta } from "@/src/lib/url-tarjeta";
-import type { RevisionPayload } from "@/src/types/revision";
+import type { EstadoTarea, RevisionPayload } from "@/src/types/revision";
 
 type TareaRecord = {
   id: string;
@@ -28,6 +28,10 @@ export type UpsertTareaInput = {
   fase: string;
   descripcion: string;
   url_tarjeta?: string | null;
+  inicio?: string | null;
+  fin?: string | null;
+  completado?: boolean;
+  estado?: EstadoTarea | null;
   mergeKey?: string;
 };
 
@@ -156,6 +160,10 @@ export class SupabaseRevisionRepository implements RevisionRepository {
       titulo: input.titulo,
       fase: input.fase,
       descripcion: input.descripcion,
+      inicio: input.inicio ?? null,
+      fin: input.fin ?? null,
+      completado: input.completado ?? false,
+      estado: input.estado ?? "Pendiente",
       merge_key: mergeKey,
       updated_at: updatedAt,
       url_tarjeta: chooseBestUrlTarjeta(
@@ -348,6 +356,10 @@ export class SupabaseRevisionRepository implements RevisionRepository {
         fase: input.fase,
         descripcion: input.descripcion,
         url_tarjeta: chooseBestUrlTarjeta(null, input.url_tarjeta),
+        inicio: input.inicio ?? null,
+        fin: input.fin ?? null,
+        completado: input.completado ?? false,
+        estado: input.estado ?? "Pendiente",
         merge_key: mergeKey,
         updated_at: updatedAt,
       })

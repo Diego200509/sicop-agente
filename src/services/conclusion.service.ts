@@ -11,6 +11,14 @@ function truncate(value: string | null | undefined, max: number): string {
   return `${t.slice(0, max)}…`;
 }
 
+function formatTaskDate(value: string | null | undefined): string {
+  return value?.trim() ? value : "No definido";
+}
+
+function formatTaskCompleted(value: boolean | null | undefined): string {
+  return value === true ? "Sí" : "No";
+}
+
 const CONCLUSION_SYSTEM = `Eres analista del proyecto SICOP. Solo usas la informacion proporcionada (tarea y revisiones). No inventes datos.
 Debes responder con un JSON valido (sin markdown) con exactamente estas claves:
 {
@@ -114,6 +122,10 @@ export class ConclusionService {
       "## Tarea",
       `Titulo: ${tarea.titulo}`,
       `Fase: ${tarea.fase}`,
+      `Inicio: ${formatTaskDate(tarea.inicio)}`,
+      `Fin: ${formatTaskDate(tarea.fin)}`,
+      `Estado: ${tarea.estado?.trim() || "Pendiente"}`,
+      `Completado: ${formatTaskCompleted(tarea.completado)}`,
       `Descripcion: ${truncate(tarea.descripcion, 3000)}`,
       "",
       "## Revision documental (mas reciente)",

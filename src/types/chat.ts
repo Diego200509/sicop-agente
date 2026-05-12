@@ -72,6 +72,10 @@ export interface TareaContext {
   fase: string;
   descripcion: string;
   url_tarjeta?: string | null;
+  inicio?: string | null;
+  fin?: string | null;
+  completado?: boolean | null;
+  estado?: string | null;
   created_at?: string | null;
 }
 
