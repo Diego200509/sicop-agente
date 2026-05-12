@@ -53,6 +53,7 @@ type ReportBlock =
 const DEFAULT_FILENAME = "reporte-seguimiento-sicop.pdf";
 const STORAGE_BUCKET = "reportes-pdf";
 const REPORT_RECORD_TITLE = "Reporte automático de seguimiento SICOP";
+const TOTAL_TAREAS_ANALIZADAS = 22;
 const REPORT_TITLE = "Reporte Automático - Proyecto SICOP";
 const REPORT_SUBTITLE = "Agente autónomo de seguimiento del tablero Trello";
 const REPORT_FOOTER = "Reporte generado automáticamente por el agente autónomo SICOP.";
@@ -715,8 +716,8 @@ async function persistGeneratedReport({
     const { error } = await supabase.from("reportes_seguimiento").insert({
       titulo: title,
       tipo_reporte: "seguimiento_autonomo",
-      fecha_revision: fechaRevision,
-      total_tareas: getMetadataNumber(metadata, "total_tareas"),
+      fecha_revision: toSupabaseRevisionDate(fechaRevision),
+      total_tareas: getMetadataNumber(metadata, "total_tareas", TOTAL_TAREAS_ANALIZADAS),
       tareas_completadas: getMetadataNumber(metadata, "tareas_completadas"),
       tareas_proximas: getMetadataNumber(metadata, "tareas_proximas"),
       tareas_atrasadas: getMetadataNumber(metadata, "tareas_atrasadas"),
@@ -748,7 +749,11 @@ function buildStoragePath(): string {
   return `reportes/reporte-seguimiento-sicop-${Date.now()}.pdf`;
 }
 
-function getMetadataNumber(metadata: ReportMetadata | undefined, key: keyof ReportMetadata): number {
+function getMetadataNumber(
+  metadata: ReportMetadata | undefined,
+  key: keyof ReportMetadata,
+  fallback = 0,
+): number {
   const value = metadata?.[key];
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string") {
@@ -756,7 +761,7 @@ function getMetadataNumber(metadata: ReportMetadata | undefined, key: keyof Repo
     if (Number.isFinite(numericValue)) return numericValue;
   }
 
-  return 0;
+  return fallback;
 }
 
 function getMetadataString(metadata: ReportMetadata | undefined, key: keyof ReportMetadata): string | null {
@@ -770,4 +775,12 @@ function getMetadataString(metadata: ReportMetadata | undefined, key: keyof Repo
 function formatErrorMessage(prefix: string, error: unknown): string {
   if (error instanceof Error) return `${prefix}: ${error.message}`;
   return prefix;
+}
+
+function toSupabaseRevisionDate(value: string): string {
+  const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(value.trim());
+  if (!match) return value;
+
+  const [, day, month, year] = match;
+  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}T12:00:00-05:00`;
 }

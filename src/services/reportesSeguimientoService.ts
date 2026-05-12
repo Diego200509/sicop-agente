@@ -60,11 +60,13 @@ export async function getReporteSeguimientoById(id: string): Promise<ReporteSegu
 }
 
 function mapReporteSeguimiento(row: ReporteSeguimientoRow): ReporteSeguimiento {
+  const metadataFechaRevision = getMetadataString(row.metadata, "fecha_revision");
+
   return {
     id: row.id,
     titulo: row.titulo ?? "Reporte automático de seguimiento SICOP",
     tipo_reporte: row.tipo_reporte ?? "seguimiento_autonomo",
-    fecha_revision: row.fecha_revision ?? row.created_at,
+    fecha_revision: metadataFechaRevision ?? row.fecha_revision ?? row.created_at,
     total_tareas: normalizeNumber(row.total_tareas),
     tareas_completadas: normalizeNumber(row.tareas_completadas),
     tareas_proximas: normalizeNumber(row.tareas_proximas),
@@ -84,6 +86,18 @@ function mapReporteSeguimiento(row: ReporteSeguimientoRow): ReporteSeguimiento {
     metadata: row.metadata ?? null,
     created_at: row.created_at,
   };
+}
+
+function getMetadataString(metadata: unknown, key: string): string | null {
+  if (metadata == null || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return null;
+  }
+
+  const value = (metadata as Record<string, unknown>)[key];
+  if (typeof value !== "string") return null;
+
+  const text = value.trim();
+  return text ? text : null;
 }
 
 function normalizeNumber(value: unknown): number {

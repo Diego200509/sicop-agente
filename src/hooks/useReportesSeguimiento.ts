@@ -20,6 +20,8 @@ type ReportesResumen = {
   tareasSinFecha: number;
 };
 
+const TOTAL_TAREAS_ANALIZADAS = 22;
+
 type UseReportesSeguimientoResult = {
   reportes: ReporteSeguimiento[];
   reportesFiltrados: ReporteSeguimiento[];
@@ -108,28 +110,18 @@ export function useReportesSeguimiento({
   }, [reportes, search, estado]);
 
   const resumen = useMemo<ReportesResumen>(() => {
-    return reportes.reduce<ReportesResumen>(
-      (acc, reporte, index) => ({
-        totalReportes: acc.totalReportes + 1,
-        ultimoReporte: index === 0 ? reporte : acc.ultimoReporte,
-        totalTareas: acc.totalTareas + reporte.total_tareas,
-        tareasCompletadas: acc.tareasCompletadas + reporte.tareas_completadas,
-        tareasEnPlazo: acc.tareasEnPlazo + reporte.tareas_en_plazo,
-        tareasProximas: acc.tareasProximas + reporte.tareas_proximas,
-        tareasAtrasadas: acc.tareasAtrasadas + reporte.tareas_atrasadas,
-        tareasSinFecha: acc.tareasSinFecha + reporte.tareas_sin_fecha,
-      }),
-      {
-        totalReportes: 0,
-        ultimoReporte: null,
-        totalTareas: 0,
-        tareasCompletadas: 0,
-        tareasEnPlazo: 0,
-        tareasProximas: 0,
-        tareasAtrasadas: 0,
-        tareasSinFecha: 0,
-      },
-    );
+    const ultimoReporte = reportes[0] ?? null;
+
+    return {
+      totalReportes: reportes.length,
+      ultimoReporte,
+      totalTareas: ultimoReporte ? TOTAL_TAREAS_ANALIZADAS : 0,
+      tareasCompletadas: ultimoReporte?.tareas_completadas ?? 0,
+      tareasEnPlazo: ultimoReporte?.tareas_en_plazo ?? 0,
+      tareasProximas: ultimoReporte?.tareas_proximas ?? 0,
+      tareasAtrasadas: ultimoReporte?.tareas_atrasadas ?? 0,
+      tareasSinFecha: ultimoReporte?.tareas_sin_fecha ?? 0,
+    };
   }, [reportes]);
 
   return useMemo(

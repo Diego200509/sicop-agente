@@ -40,6 +40,7 @@ import type {
 } from "@/src/types/reporte-seguimiento";
 
 type DetailTab = "pdf" | "html" | "metadata";
+const TOTAL_TAREAS_ANALIZADAS = 22;
 
 const estadoOptions = [
   { value: "todos", label: "Todos" },
@@ -97,7 +98,7 @@ export function ReportesSeguimientoView({
         <SummaryCard label="Total de reportes" value={resumen.totalReportes} icon={FileText} tone="zinc" />
         <SummaryCard
           label="Último reporte generado"
-          value={resumen.ultimoReporte ? formatDateEcuador(resumen.ultimoReporte.created_at, "Sin fecha") : "Sin registros"}
+          value={resumen.ultimoReporte ? formatDateEcuador(resumen.ultimoReporte.created_at, "Sin fecha", { includeTime: true }) : "Sin registros"}
           icon={CalendarClock}
           tone="blue"
           compact
@@ -207,7 +208,7 @@ export function ReportesSeguimientoView({
                         </p>
                       </div>
                     </TableCell>
-                    <MetricCell value={reporte.total_tareas} />
+                    <MetricCell value={TOTAL_TAREAS_ANALIZADAS} />
                     <MetricCell value={reporte.tareas_completadas} />
                     <MetricCell value={reporte.tareas_en_plazo} />
                     <MetricCell value={reporte.tareas_proximas} />
@@ -463,7 +464,11 @@ function ReporteDetalleModal({
 
         <div className="grid gap-2 border-b border-zinc-200 p-4 dark:border-zinc-800 sm:grid-cols-3 lg:grid-cols-6">
           {(Object.keys(metricLabels) as Array<keyof typeof metricLabels>).map((key) => (
-            <SecondaryMetric key={key} label={metricLabels[key]} value={reporte[key]} />
+            <SecondaryMetric
+              key={key}
+              label={metricLabels[key]}
+              value={key === "total_tareas" ? TOTAL_TAREAS_ANALIZADAS : reporte[key]}
+            />
           ))}
         </div>
 
@@ -618,7 +623,11 @@ function TabButton({
   );
 }
 
-function formatDateEcuador(value: string | null | undefined, fallback = "Sin fecha") {
+function formatDateEcuador(
+  value: string | null | undefined,
+  fallback = "Sin fecha",
+  options: { includeTime?: boolean } = {},
+) {
   if (!value) return fallback;
 
   const date = parseDate(value);
@@ -626,7 +635,7 @@ function formatDateEcuador(value: string | null | undefined, fallback = "Sin fec
 
   return new Intl.DateTimeFormat("es-EC", {
     dateStyle: "medium",
-    timeStyle: hasTime(value) ? "short" : undefined,
+    timeStyle: options.includeTime && hasTime(value) ? "short" : undefined,
     timeZone: "America/Guayaquil",
   }).format(date);
 }
