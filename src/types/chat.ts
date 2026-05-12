@@ -2,6 +2,15 @@ import type { DocumentQuestionType } from "@/src/lib/document-sections";
 import type { PhaseMode } from "@/src/lib/fases";
 
 export type ChatUserIntent = "conversacional" | "consulta" | "analisis";
+export type ChatQuestionKind =
+  | "general"
+  | "task_list"
+  | "project_status"
+  | "missing_work"
+  | "overdue"
+  | "risks"
+  | "executive_summary"
+  | "priority_ranking";
 
 export type { DocumentQuestionType } from "@/src/lib/document-sections";
 
@@ -35,6 +44,8 @@ export interface ChatPromptMeta {
   generalBroad: boolean;
   /** Intención del mensaje actual; define el formato de la respuesta (solo en sendMessage). */
   intent?: ChatUserIntent;
+  /** Tipo especifico de pregunta; define enfoque de contexto y formato esperado. */
+  questionKind?: ChatQuestionKind;
   /** true si el contexto incluye fragmentos del texto fuente (PDF) recuperados por seccion. */
   documentEvidenceActive?: boolean;
   /** Numero de tareas incluidas efectivamente en el contexto general. */

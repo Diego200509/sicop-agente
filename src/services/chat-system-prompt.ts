@@ -263,6 +263,90 @@ function appendScopeRulesConsulta(meta: ChatPromptMeta): string[] {
   return lines;
 }
 
+function appendQuestionKindRules(meta: ChatPromptMeta): string[] {
+  const kind = meta.questionKind ?? "general";
+  if (kind === "general") return [];
+
+  const common = [
+    "",
+    "## Formato por tipo de pregunta",
+    "El contexto incluye bloques ya calculados para esta intencion. Usa esos datos antes que inferencias libres.",
+    "Si un dato aparece como N/D o No definido, dilo como dato incompleto; no lo rellenes.",
+  ];
+
+  if (kind === "task_list") {
+    return [
+      ...common,
+      "Tipo detectado: listado de tareas.",
+      "Responde con una tabla Markdown con columnas: Tarea | Fase | Estado | Fecha fin | Enlace.",
+      "Incluye todas las tareas cargadas en el contexto y conserva enlaces Trello cuando existan.",
+      "No agregues analisis largo; despues de la tabla puedes cerrar con una frase breve de alcance si aplica.",
+    ];
+  }
+
+  if (kind === "project_status") {
+    return [
+      ...common,
+      "Tipo detectado: estado/avance del proyecto.",
+      "Responde con estas secciones breves: Avance general, Riesgos, Recomendaciones.",
+      "Incluye porcentaje o conteo de avance cuando este en Metricas operativas.",
+      "Agrupa comentarios por fase si el contexto lo provee.",
+    ];
+  }
+
+  if (kind === "missing_work") {
+    return [
+      ...common,
+      "Tipo detectado: faltantes o pendientes.",
+      "Responde agrupando por fase cuando hables de tareas pendientes.",
+      "Incluye un bloque de datos incompletos con conteos: sin fecha fin, sin enlace Trello, sin revision documental y sin revision de codigo cuando aplique.",
+      "No mezcles estado operativo de Trello con estado de revision: tratalos como datos distintos.",
+    ];
+  }
+
+  if (kind === "overdue") {
+    return [
+      ...common,
+      "Tipo detectado: tareas atrasadas.",
+      "Ordena por criticidad: vencidas primero, luego pendientes sin fecha fin, luego proximas a vencer si aparecen.",
+      "Usa una tabla Markdown con columnas: Tarea | Fase | Estado | Fecha fin | Criticidad | Motivo | Enlace.",
+      "Si no hay tareas vencidas, dilo claramente y menciona pendientes sin fecha fin como riesgo de planificacion.",
+    ];
+  }
+
+  if (kind === "risks") {
+    return [
+      ...common,
+      "Tipo detectado: riesgos.",
+      "Prioriza atrasos, tareas sin fecha fin, tareas sin enlace, tareas sin revision documental/codigo y hallazgos de analisis documental/codigo.",
+      "Responde con: Riesgos principales, Evidencia, Impacto, Recomendaciones.",
+      "No inventes responsables: si no hay campo de responsable, dilo solo si el usuario lo pide o si es relevante para el riesgo.",
+    ];
+  }
+
+  if (kind === "executive_summary") {
+    return [
+      ...common,
+      "Tipo detectado: modo ejecutivo.",
+      "Responde exactamente con estas secciones: Avance general, Tareas criticas, Bloqueos, Proximos pasos, Recomendaciones.",
+      "Se conciso, orientado a decision y basado en los conteos/ranking del contexto.",
+      "Incluye maximo 5 tareas criticas salvo que el usuario pida mas.",
+    ];
+  }
+
+  if (kind === "priority_ranking") {
+    return [
+      ...common,
+      "Tipo detectado: ranking de prioridad.",
+      "Responde con una tabla Markdown ordenada por prioridad descendente.",
+      "Columnas sugeridas: Prioridad | Tarea | Fase | Estado | Fecha fin | Motivo.",
+      "Explica en una frase que la prioridad se basa en fecha fin, atraso, estado, revisiones faltantes y datos incompletos.",
+    ];
+  }
+
+  return common;
+}
+
 export function buildChatSystemPrompt(meta: ChatPromptMeta): string {
   const intent = meta.intent ?? "consulta";
 
@@ -293,6 +377,7 @@ export function buildChatSystemPrompt(meta: ChatPromptMeta): string {
       "Responde de forma directa y clara; puedes usar listas con guiones o numeros cuando ayuden a leer.",
       "No uses la estructura obligatoria por secciones (Resumen, Cumplimiento, Observaciones, Riesgos, Recomendacion).",
       "Evita informes largos salvo que la pregunta lo exija de forma evidente.",
+      ...appendQuestionKindRules(meta),
       ...appendScopeRulesConsulta(meta),
       ...appendDocumentSourceRules(meta),
     ].join("\n");
@@ -304,6 +389,7 @@ export function buildChatSystemPrompt(meta: ChatPromptMeta): string {
     "No afirmes cumplimiento Completo si la evidencia no lo respalda.",
     "",
     STRUCTURED_SECTIONS,
+    ...appendQuestionKindRules(meta),
     ...appendScopeRulesAnalisis(meta),
     ...appendTechnicalCodeEvidenceRules(meta),
     ...appendDocumentSourceRules(meta),

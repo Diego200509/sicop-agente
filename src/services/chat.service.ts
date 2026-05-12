@@ -8,14 +8,15 @@ import { TareasRepository } from "@/src/repositories/tareas.repository";
 import { assembleSingleTaskModelContext } from "@/src/services/chat-context-assembly";
 import { buildGeneralContext, buildTaskFocusedContext } from "@/src/services/chat-general-context";
 import { resolveGeneralTaskFromMessage } from "@/src/services/chat-general-resolution";
-import { detectUserIntent } from "@/src/lib/chat-user-intent";
+import { detectQuestionKind, detectUserIntent } from "@/src/lib/chat-user-intent";
 import { buildChatSystemPrompt } from "@/src/services/chat-system-prompt";
-import type { ChatContext, ChatPromptMeta, ChatResponse, ChatUserIntent } from "@/src/types/chat";
+import type { ChatContext, ChatPromptMeta, ChatQuestionKind, ChatResponse, ChatUserIntent } from "@/src/types/chat";
 
 const DEFAULT_PROMPT_META: ChatPromptMeta = {
   phaseMode: null,
   comparativeActive: false,
   generalBroad: true,
+  questionKind: "general",
 };
 
 export class ChatService {
@@ -39,7 +40,7 @@ export class ChatService {
 
   async buildContext(
     tareaUuid: string | null,
-    opts?: { userMessage?: string; intent?: ChatUserIntent },
+    opts?: { userMessage?: string; intent?: ChatUserIntent; questionKind?: ChatQuestionKind },
   ): Promise<ChatContext> {
     if (tareaUuid) {
       const tarea = await this.tareasRepo.getByUuid(tareaUuid);
@@ -88,6 +89,7 @@ export class ChatService {
           comparativeActive: assembled.comparativeActive,
           codePrEvidenceActive: assembled.codePrEvidenceActive,
           generalBroad: false,
+          questionKind: opts?.questionKind ?? "general",
           documentEvidenceActive: assembled.documentEvidenceActive,
           documentEvidenceCount: assembled.documentEvidenceCount,
           documentQuestionType: assembled.documentQuestionType,
@@ -122,7 +124,8 @@ export class ChatService {
     await this.chatRepo.insertMessage({ tareaId: tareaUuid, rol: "user", mensaje: trimmed });
 
     const intent = detectUserIntent(trimmed);
-    const contextOpts = { userMessage: trimmed, intent };
+    const questionKind = detectQuestionKind(trimmed);
+    const contextOpts = { userMessage: trimmed, intent, questionKind };
 
     let contextText: string;
     let promptMeta: ChatPromptMeta = DEFAULT_PROMPT_META;
@@ -135,13 +138,21 @@ export class ChatService {
       const config = getChatGeneralConfig();
       const pool = await this.tareasRepo.listForMatching(config.matchingPool);
       const matchTasks = pool.map((t) => ({ id: t.id, id_tarea: t.id_tarea, titulo: t.titulo }));
+      const forceGeneralContext =
+        questionKind === "task_list" ||
+        questionKind === "project_status" ||
+        questionKind === "overdue" ||
+        questionKind === "executive_summary" ||
+        questionKind === "priority_ranking";
 
-      const resolution = await resolveGeneralTaskFromMessage({
-        userMessage: trimmed,
-        tasks: matchTasks,
-        openai: this.openai,
-        model: this.model(),
-      });
+      const resolution = forceGeneralContext
+        ? ({ kind: "none" } as const)
+        : await resolveGeneralTaskFromMessage({
+            userMessage: trimmed,
+            tasks: matchTasks,
+            openai: this.openai,
+            model: this.model(),
+          });
 
       if (resolution.kind === "ambiguous") {
         const lines = resolution.titles.map((t) => `- ${t}`).join("\n");

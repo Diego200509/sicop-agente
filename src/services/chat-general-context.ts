@@ -20,7 +20,7 @@ import {
   type RevisionFormatLimits,
 } from "@/src/services/chat-context-assembly";
 import { FASES_TABLERO, getPhaseMode, normalizePhase } from "@/src/lib/fases";
-import type { ChatPromptMeta, ChatUserIntent, RevisionContext, TareaContext } from "@/src/types/chat";
+import type { ChatPromptMeta, ChatQuestionKind, ChatUserIntent, RevisionContext, TareaContext } from "@/src/types/chat";
 
 export type BuiltChatContext = {
   contextText: string;
@@ -30,6 +30,7 @@ export type BuiltChatContext = {
 export type ChatContextBuildOptions = {
   userMessage?: string;
   intent?: ChatUserIntent;
+  questionKind?: ChatQuestionKind;
 };
 
 type RevisionPair = {
@@ -173,6 +174,350 @@ function formatTaskEvidenceStatus(
   return `${docStatus}; ${codeStatus}`;
 }
 
+type TaskOperationalInsight = {
+  task: TareaContext;
+  doc: RevisionContext | null;
+  code: RevisionContext | null;
+  phaseMode: ReturnType<typeof getPhaseMode>;
+  completed: boolean;
+  status: "Cumplida" | "Pendiente";
+  inicioLabel: string;
+  finLabel: string;
+  dueAt: Date | null;
+  daysLate: number | null;
+  daysToDue: number | null;
+  missing: string[];
+  priorityScore: number;
+  priorityLabel: "Alta" | "Media" | "Baja";
+  priorityReasons: string[];
+};
+
+function formatContextDate(value: string | null | undefined): string {
+  return value?.trim() ? value : "No definido";
+}
+
+function parseTaskDate(value: string | null | undefined): Date | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function daysBetween(start: Date, end: Date): number {
+  return Math.floor((start.getTime() - end.getTime()) / 86_400_000);
+}
+
+function escapeTableCell(value: string | null | undefined): string {
+  return (value?.trim() || "N/D").replace(/\|/g, "\\|").replace(/\n/g, " ");
+}
+
+function markdownLink(url: string | null | undefined): string {
+  const clean = url?.trim();
+  return clean ? `[Trello](${clean})` : "N/D";
+}
+
+function buildOperationalInsights(
+  tasks: TareaContext[],
+  revMap: Map<string, RevisionPair>,
+): TaskOperationalInsight[] {
+  const now = new Date();
+
+  return tasks.map((task) => {
+    const pair = revMap.get(task.id);
+    const doc = pair?.doc ?? null;
+    const phaseMode = getPhaseMode(task.fase);
+    const code = phaseMode === "mixto" ? (pair?.code ?? null) : null;
+    const completed = task.completado === true || task.estado === "Cumplida";
+    const status = completed ? "Cumplida" : "Pendiente";
+    const dueAt = parseTaskDate(task.fin);
+    const daysLate = !completed && dueAt && dueAt.getTime() < now.getTime() ? Math.max(0, daysBetween(now, dueAt)) : null;
+    const daysToDue = !completed && dueAt && dueAt.getTime() >= now.getTime() ? Math.ceil((dueAt.getTime() - now.getTime()) / 86_400_000) : null;
+    const missing: string[] = [];
+
+    if (!task.inicio?.trim()) missing.push("sin fecha inicio");
+    if (!task.fin?.trim()) missing.push("sin fecha fin");
+    if (!task.url_tarjeta?.trim()) missing.push("sin enlace Trello");
+    if (!doc) missing.push("sin revision documental");
+    if (phaseMode === "mixto" && !code) missing.push("sin revision de codigo");
+
+    let priorityScore = 0;
+    const priorityReasons: string[] = [];
+
+    if (!completed) {
+      priorityScore += 10;
+      priorityReasons.push("pendiente");
+    }
+    if (daysLate != null) {
+      priorityScore += 60 + Math.min(20, daysLate);
+      priorityReasons.push(`vencida hace ${daysLate} dia(s)`);
+    } else if (daysToDue != null && daysToDue <= 3) {
+      priorityScore += 30;
+      priorityReasons.push(`vence en ${daysToDue} dia(s)`);
+    }
+    if (!task.fin?.trim()) {
+      priorityScore += completed ? 4 : 22;
+      priorityReasons.push("sin fecha fin");
+    }
+    if (!doc) {
+      priorityScore += 18;
+      priorityReasons.push("sin revision documental");
+    }
+    if (phaseMode === "mixto" && !code) {
+      priorityScore += 18;
+      priorityReasons.push("sin revision de codigo");
+    }
+    if (!task.url_tarjeta?.trim()) {
+      priorityScore += 6;
+      priorityReasons.push("sin enlace Trello");
+    }
+    if (normalizePhase(task.fase).includes("desarrollo") || normalizePhase(task.fase).includes("seguimiento")) {
+      priorityScore += 6;
+      priorityReasons.push("fase sensible");
+    }
+
+    const priorityLabel = priorityScore >= 65 ? "Alta" : priorityScore >= 30 ? "Media" : "Baja";
+
+    return {
+      task,
+      doc,
+      code,
+      phaseMode,
+      completed,
+      status,
+      inicioLabel: formatContextDate(task.inicio),
+      finLabel: formatContextDate(task.fin),
+      dueAt,
+      daysLate,
+      daysToDue,
+      missing,
+      priorityScore,
+      priorityLabel,
+      priorityReasons,
+    };
+  });
+}
+
+function summarizeOperationalMetrics(insights: TaskOperationalInsight[]): string[] {
+  const total = insights.length;
+  const completed = insights.filter((i) => i.completed).length;
+  const pending = total - completed;
+  const withoutInicio = insights.filter((i) => !i.task.inicio?.trim()).length;
+  const withoutFin = insights.filter((i) => !i.task.fin?.trim()).length;
+  const withoutUrl = insights.filter((i) => !i.task.url_tarjeta?.trim()).length;
+  const withoutDoc = insights.filter((i) => !i.doc).length;
+  const withoutCode = insights.filter((i) => i.phaseMode === "mixto" && !i.code).length;
+  const overdue = insights.filter((i) => i.daysLate != null).length;
+  const dueSoon = insights.filter((i) => i.daysToDue != null && i.daysToDue <= 3).length;
+  const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+  return [
+    `Total de tareas cargadas: ${total}`,
+    `Avance operativo: ${completed}/${total} cumplidas (${progress}%).`,
+    `Pendientes: ${pending}.`,
+    `Tareas atrasadas: ${overdue}.`,
+    `Tareas que vencen en 3 dias o menos: ${dueSoon}.`,
+    `Tareas sin fecha inicio: ${withoutInicio}.`,
+    `Tareas sin fecha fin: ${withoutFin}.`,
+    `Tareas sin enlace Trello: ${withoutUrl}.`,
+    `Tareas sin revision documental: ${withoutDoc}.`,
+    `Tareas mixtas sin revision de codigo: ${withoutCode}.`,
+    "Responsables: no hay campo de responsable disponible en el esquema actual.",
+  ];
+}
+
+function taskTableRows(insights: TaskOperationalInsight[]): string[] {
+  return insights.map((i) =>
+    [
+      escapeTableCell(i.task.titulo),
+      escapeTableCell(i.task.fase),
+      i.status,
+      escapeTableCell(i.finLabel),
+      markdownLink(i.task.url_tarjeta),
+    ].join(" | "),
+  );
+}
+
+function formatTaskTable(insights: TaskOperationalInsight[]): string {
+  return [
+    "Tarea | Fase | Estado | Fecha fin | Enlace",
+    "--- | --- | --- | --- | ---",
+    ...taskTableRows(insights),
+  ].join("\n");
+}
+
+function formatPriorityLine(i: TaskOperationalInsight): string {
+  const reasons = i.priorityReasons.length > 0 ? i.priorityReasons.join("; ") : "sin alertas fuertes";
+  return `- ${i.priorityLabel} (${i.priorityScore}): ${i.task.titulo} | Fase: ${i.task.fase} | Estado: ${i.status} | Fin: ${i.finLabel} | Motivos: ${reasons} | Enlace: ${i.task.url_tarjeta?.trim() || "N/D"}`;
+}
+
+function buildMissingDataBlock(insights: TaskOperationalInsight[]): string {
+  const categories: Array<[string, (i: TaskOperationalInsight) => boolean]> = [
+    ["Sin fecha inicio", (i) => !i.task.inicio?.trim()],
+    ["Sin fecha fin", (i) => !i.task.fin?.trim()],
+    ["Sin enlace Trello", (i) => !i.task.url_tarjeta?.trim()],
+    ["Sin revision documental", (i) => !i.doc],
+    ["Mixtas sin revision de codigo", (i) => i.phaseMode === "mixto" && !i.code],
+  ];
+
+  const blocks = categories.map(([title, predicate]) => {
+    const matches = insights.filter(predicate);
+    const rows =
+      matches.length === 0
+        ? ["- Ninguna."]
+        : matches.map((i) => `- ${i.task.titulo} | Fase: ${i.task.fase} | Estado: ${i.status} | Fin: ${i.finLabel}`);
+    return [`### ${title} (${matches.length})`, ...rows].join("\n");
+  });
+
+  return ["## Datos incompletos detectados", ...blocks].join("\n\n");
+}
+
+function buildOverdueBlock(insights: TaskOperationalInsight[]): string {
+  const overdue = insights
+    .filter((i) => i.daysLate != null)
+    .sort((a, b) => (b.daysLate ?? 0) - (a.daysLate ?? 0));
+  const noDueDate = insights.filter((i) => !i.completed && !i.task.fin?.trim());
+
+  return [
+    "## Tareas atrasadas y sin fecha fin",
+    overdue.length === 0
+      ? "No hay tareas vencidas segun la fecha fin registrada."
+      : [
+          "### Vencidas",
+          "Tarea | Fase | Estado | Fecha fin | Dias atraso | Enlace",
+          "--- | --- | --- | --- | --- | ---",
+          ...overdue.map((i) =>
+            [
+              escapeTableCell(i.task.titulo),
+              escapeTableCell(i.task.fase),
+              i.status,
+              escapeTableCell(i.finLabel),
+              String(i.daysLate ?? 0),
+              markdownLink(i.task.url_tarjeta),
+            ].join(" | "),
+          ),
+        ].join("\n"),
+    noDueDate.length === 0
+      ? "### Pendientes sin fecha fin\n- Ninguna."
+      : ["### Pendientes sin fecha fin", ...noDueDate.map(formatPriorityLine)].join("\n"),
+  ].join("\n\n");
+}
+
+function buildRiskBlock(insights: TaskOperationalInsight[]): string {
+  const ranked = [...insights].sort((a, b) => b.priorityScore - a.priorityScore).slice(0, 12);
+  const analysisHints = ranked
+    .map((i) => {
+      const doc = i.doc?.analisis_documental?.trim();
+      const code = i.code?.analisis_codigo?.trim();
+      const hints = [doc ? `Doc: ${doc.slice(0, 360)}` : null, code ? `Codigo: ${code.slice(0, 360)}` : null].filter(Boolean);
+      return hints.length > 0 ? `- ${i.task.titulo}: ${hints.join(" | ")}` : null;
+    })
+    .filter(Boolean);
+
+  return [
+    "## Riesgos priorizados",
+    ...ranked.map(formatPriorityLine),
+    "",
+    "## Evidencia breve desde revisiones para riesgos",
+    analysisHints.length > 0 ? analysisHints.join("\n") : "- No hay analisis documental/codigo suficiente en las tareas priorizadas.",
+  ].join("\n");
+}
+
+function buildFocusedContextByQuestionKind(params: {
+  questionKind: ChatQuestionKind;
+  tasks: TareaContext[];
+  revMap: Map<string, RevisionPair>;
+  totalTasksAvailable: number;
+  config: ChatGeneralConfig;
+}): string {
+  const { questionKind, tasks, revMap, totalTasksAvailable, config } = params;
+  const insights = buildOperationalInsights(tasks, revMap);
+  const sortedByPhase = [...insights].sort((a, b) => {
+    const phase = normalizePhase(a.task.fase).localeCompare(normalizePhase(b.task.fase), "es");
+    return phase !== 0 ? phase : a.task.titulo.localeCompare(b.task.titulo, "es");
+  });
+  const ranked = [...insights].sort((a, b) => b.priorityScore - a.priorityScore);
+  const isPartial = totalTasksAvailable > tasks.length;
+
+  const base = [
+    "## Contexto operativo enfocado del proyecto SICOP",
+    isPartial
+      ? `Contexto cargado: ${tasks.length} de ${totalTasksAvailable} tareas disponibles.`
+      : `Contexto cargado: ${tasks.length} tareas registradas.`,
+    `Limite configurado para contexto general: ${config.maxTasks} tareas.`,
+    "",
+    "## Metricas operativas",
+    ...summarizeOperationalMetrics(insights).map((line) => `- ${line}`),
+  ];
+
+  if (questionKind === "task_list") {
+    return [...base, "", "## Lista completa de tareas cargadas", formatTaskTable(sortedByPhase)].join("\n");
+  }
+
+  if (questionKind === "overdue") {
+    return [...base, "", buildOverdueBlock(insights), "", "## Ranking de criticidad", ...ranked.slice(0, 10).map(formatPriorityLine)].join("\n");
+  }
+
+  if (questionKind === "missing_work") {
+    const byPhase = FASES_TABLERO.map((phase) => {
+      const pending = sortedByPhase.filter((i) => normalizePhase(i.task.fase) === phase.key && !i.completed);
+      const rows = pending.length > 0 ? pending.map(formatPriorityLine) : ["- Ninguna pendiente en esta fase."];
+      return [`### ${phase.titulo}`, ...rows].join("\n");
+    });
+    return [...base, "", buildMissingDataBlock(insights), "", "## Pendientes agrupados por fase", ...byPhase].join("\n\n");
+  }
+
+  if (questionKind === "risks") {
+    return [...base, "", buildRiskBlock(insights), "", buildMissingDataBlock(insights)].join("\n");
+  }
+
+  if (questionKind === "priority_ranking") {
+    return [...base, "", "## Ranking de prioridad", ...ranked.map(formatPriorityLine)].join("\n");
+  }
+
+  if (questionKind === "executive_summary") {
+    return [
+      ...base,
+      "",
+      "## Insumos para resumen ejecutivo",
+      "Usar estas secciones obligatorias en la respuesta: avance general, tareas criticas, bloqueos, proximos pasos y recomendaciones.",
+      "",
+      "## Tareas criticas",
+      ...ranked.slice(0, 8).map(formatPriorityLine),
+      "",
+      buildOverdueBlock(insights),
+      "",
+      buildMissingDataBlock(insights),
+    ].join("\n");
+  }
+
+  if (questionKind === "project_status") {
+    return [
+      ...base,
+      "",
+      "## Avance por fase",
+      ...FASES_TABLERO.map((phase) => {
+        const phaseItems = sortedByPhase.filter((i) => normalizePhase(i.task.fase) === phase.key);
+        const done = phaseItems.filter((i) => i.completed).length;
+        const rows = phaseItems.length > 0 ? phaseItems.map((i) => `- ${i.task.titulo} | ${i.status} | Fin: ${i.finLabel}`) : ["- Sin tareas."];
+        return [`### ${phase.titulo}: ${done}/${phaseItems.length} cumplidas`, ...rows].join("\n");
+      }),
+      "",
+      "## Riesgos y proximos focos",
+      ...ranked.slice(0, 8).map(formatPriorityLine),
+      "",
+      buildMissingDataBlock(insights),
+    ].join("\n");
+  }
+
+  return [...base, "", "## Lista base", formatTaskTable(sortedByPhase), "", "## Ranking de prioridad", ...ranked.slice(0, 10).map(formatPriorityLine)].join("\n");
+}
+
+function hasAnyComparativeContext(tasks: TareaContext[], revMap: Map<string, RevisionPair>): boolean {
+  return tasks.some((task) => {
+    const pair = revMap.get(task.id);
+    return getPhaseMode(task.fase) === "mixto" && Boolean(pair?.doc && pair?.code);
+  });
+}
+
 export async function buildGeneralContext(
   tareasRepo: TareasRepository,
   revisionesRepo: RevisionesRepository,
@@ -195,16 +540,31 @@ export async function buildGeneralContext(
     maxCodeAnalysis: 450,
   };
 
-  const projectContext = buildProjectContext({
-    tasks: tareas,
-    revMap,
-    totalTasksAvailable: totalTareasDisponibles,
-    config,
-    comparisonLimits,
-  });
+  const questionKind = options?.questionKind ?? "general";
+  const useFocusedOperationalContext = questionKind !== "general";
+  const projectContext = useFocusedOperationalContext
+    ? {
+        text: buildFocusedContextByQuestionKind({
+          questionKind,
+          tasks: tareas,
+          revMap,
+          totalTasksAvailable: totalTareasDisponibles,
+          config,
+        }),
+        anyComparative: hasAnyComparativeContext(tareas, revMap),
+      }
+    : buildProjectContext({
+        tasks: tareas,
+        revMap,
+        totalTasksAvailable: totalTareasDisponibles,
+        config,
+        comparisonLimits,
+      });
 
   let contextText = [
-    "## Contexto completo del proyecto SICOP",
+    useFocusedOperationalContext
+      ? "## Contexto seleccionado por intencion del usuario"
+      : "## Contexto completo del proyecto SICOP",
     projectContext.text,
     "",
     "## Ultimos mensajes del chat general (max 6)",
@@ -252,6 +612,7 @@ export async function buildGeneralContext(
     phaseMode: null,
     comparativeActive: projectContext.anyComparative,
     generalBroad: true,
+    questionKind,
     projectTasksLoaded: tareas.length,
     projectTasksAvailable: totalTareasDisponibles,
     documentEvidenceActive,
@@ -322,6 +683,7 @@ export async function buildTaskFocusedContext(
       comparativeActive: assembled.comparativeActive,
       codePrEvidenceActive: assembled.codePrEvidenceActive,
       generalBroad: false,
+      questionKind: options?.questionKind ?? "general",
       documentEvidenceActive: assembled.documentEvidenceActive,
       documentEvidenceCount: assembled.documentEvidenceCount,
       documentQuestionType: assembled.documentQuestionType,

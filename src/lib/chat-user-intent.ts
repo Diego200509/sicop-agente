@@ -1,5 +1,5 @@
 import { normalizeText } from "@/src/lib/chat-general-task-resolution";
-import type { ChatUserIntent } from "@/src/types/chat";
+import type { ChatQuestionKind, ChatUserIntent } from "@/src/types/chat";
 
 const ANALISIS_SUBSTRINGS = [
   "analiza",
@@ -60,4 +60,124 @@ export function detectUserIntent(message: string): ChatUserIntent {
   if (hasAnalisisIntent(norm)) return "analisis";
   if (hasConversationalIntent(norm)) return "conversacional";
   return "consulta";
+}
+
+function includesAny(normalizedMessage: string, patterns: readonly string[]): boolean {
+  return patterns.some((pattern) => normalizedMessage.includes(pattern));
+}
+
+export function detectQuestionKind(message: string): ChatQuestionKind {
+  const norm = normalizeText(message.trim());
+  if (!norm) return "general";
+
+  if (
+    includesAny(norm, [
+      "resumen ejecutivo",
+      "modo ejecutivo",
+      "dame resumen ejecutivo",
+      "informe ejecutivo",
+      "vision ejecutiva",
+    ])
+  ) {
+    return "executive_summary";
+  }
+
+  if (
+    includesAny(norm, [
+      "prioridad",
+      "prioridades",
+      "ranking",
+      "urgencia",
+      "urgente",
+      "criticas",
+      "criticos",
+      "mas importante",
+    ])
+  ) {
+    return "priority_ranking";
+  }
+
+  if (
+    includesAny(norm, [
+      "atrasado",
+      "atrasadas",
+      "atrasados",
+      "vencida",
+      "vencidas",
+      "vencido",
+      "vencidos",
+      "fuera de plazo",
+      "retraso",
+      "retrasadas",
+      "retrasados",
+    ])
+  ) {
+    return "overdue";
+  }
+
+  if (
+    includesAny(norm, [
+      "riesgo",
+      "riesgos",
+      "bloqueo",
+      "bloqueos",
+      "problema",
+      "problemas",
+      "alerta",
+      "alertas",
+    ])
+  ) {
+    return "risks";
+  }
+
+  if (
+    includesAny(norm, [
+      "que falta",
+      "qué falta",
+      "faltante",
+      "faltantes",
+      "pendiente",
+      "pendientes",
+      "incompleto",
+      "incompletos",
+      "sin fecha",
+      "sin enlace",
+      "sin revision",
+      "sin revisión",
+    ])
+  ) {
+    return "missing_work";
+  }
+
+  if (
+    includesAny(norm, [
+      "como va",
+      "cómo va",
+      "avance",
+      "estado general",
+      "estado del proyecto",
+      "situacion del proyecto",
+      "situación del proyecto",
+      "progreso",
+    ])
+  ) {
+    return "project_status";
+  }
+
+  if (
+    includesAny(norm, [
+      "que tareas hay",
+      "qué tareas hay",
+      "lista de tareas",
+      "listar tareas",
+      "muestrame las tareas",
+      "muéstrame las tareas",
+      "tareas registradas",
+      "ver tareas",
+    ])
+  ) {
+    return "task_list";
+  }
+
+  return "general";
 }
