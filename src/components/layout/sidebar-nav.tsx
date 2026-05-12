@@ -1,6 +1,6 @@
 "use client";
 
-import { ClipboardList, LayoutDashboard, MessageSquare } from "lucide-react";
+import { ClipboardList, FileText, LayoutDashboard, MessageSquare } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { MotionLink } from "@/src/components/ui/motion-press";
 import { cn } from "@/src/lib/utils";
@@ -16,6 +16,7 @@ type SidebarNavProps = {
 const navItems = [
   { href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard },
   { href: "/tareas", label: "Tareas", Icon: ClipboardList },
+  { href: "/reportes-seguimiento", label: "Reportes IA", Icon: FileText },
   { href: "/chat", label: "Chat", Icon: MessageSquare },
 ] as const;
 
