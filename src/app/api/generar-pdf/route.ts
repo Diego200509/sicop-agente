@@ -73,6 +73,9 @@ type PdfKpiItem = {
   field: PdfKpiField;
   nombre: string;
   valor: string;
+  formula?: string;
+  calculo?: string;
+  interpretacion?: string;
 };
 
 const KPI_DEFINITIONS: Array<{
@@ -239,9 +242,16 @@ const styles = StyleSheet.create({
     color: PRIMARY_BLUE,
   },
   kpiValue: {
+    marginBottom: 6,
     fontSize: 24,
     fontFamily: "Helvetica-Bold",
     color: "#0284c7",
+  },
+  kpiDetailLine: {
+    marginTop: 3,
+    fontSize: 8.5,
+    lineHeight: 1.45,
+    color: "#475569",
   },
   bold: {
     fontFamily: "Helvetica-Bold",
@@ -731,7 +741,7 @@ function renderBlock(block: ReportBlock, index: number): ReactElement {
 function renderPdfKpiSection(kpiItems: PdfKpiItem[]): ReactElement {
   return React.createElement(
     View,
-    { key: "kpi-section", style: styles.kpiSection, wrap: false },
+    { key: "kpi-section", style: styles.kpiSection },
     React.createElement(
       Text,
       { style: styles.kpiSectionTitle },
@@ -751,10 +761,30 @@ function renderPdfKpiSection(kpiItems: PdfKpiItem[]): ReactElement {
           { key: item.field, style: styles.kpiCard },
           React.createElement(Text, { style: styles.kpiName }, item.nombre),
           React.createElement(Text, { style: styles.kpiValue }, item.valor),
+          ...renderPdfKpiDetailLines(item),
         ),
       ),
     ),
   );
+}
+
+function renderPdfKpiDetailLines(item: PdfKpiItem): ReactElement[] {
+  const rows: Array<{ label: string; text: string | undefined }> = [
+    { label: "Fórmula: ", text: item.formula },
+    { label: "Cálculo: ", text: item.calculo },
+    { label: "Interpretación: ", text: item.interpretacion },
+  ];
+
+  return rows
+    .filter((row) => row.text?.trim())
+    .map((row, index) =>
+      React.createElement(
+        Text,
+        { key: `${item.field}-detail-${index}`, style: styles.kpiDetailLine },
+        React.createElement(Text, { style: styles.bold }, row.label),
+        row.text!.trim(),
+      ),
+    );
 }
 
 function renderInlineSegments(segments: InlineSegment[], keyPrefix: string): ReactElement[] {
@@ -862,6 +892,23 @@ function buildPdfKpiItems(metadata?: ReportMetadata): PdfKpiItem[] {
     const rawValue = metadata?.[definition.field] ?? getKpiSourceValue(source);
     const valor = formatKpiValue(rawValue);
     const nombre = getTextFromKpiSource(source, ["nombre", "name", "label", "titulo"]) ?? definition.label;
+    const formula = getTextFromKpiSource(source, ["formula", "fórmula", "formula_text"]);
+    const calculo = getTextFromKpiSource(source, [
+      "calculo",
+      "cálculo",
+      "calculation",
+      "detalle",
+      "explicacion",
+      "explicación",
+    ]);
+    const interpretacion = getTextFromKpiSource(source, [
+      "interpretacion",
+      "interpretación",
+      "interpretation",
+      "comentario",
+      "analisis",
+      "análisis",
+    ]);
 
     if (!valor && !source) return [];
 
@@ -870,6 +917,9 @@ function buildPdfKpiItems(metadata?: ReportMetadata): PdfKpiItem[] {
         field: definition.field,
         nombre,
         valor: valor ?? "N/D",
+        ...(formula ? { formula } : {}),
+        ...(calculo ? { calculo } : {}),
+        ...(interpretacion ? { interpretacion } : {}),
       },
     ];
   });
