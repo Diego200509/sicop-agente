@@ -73,6 +73,12 @@ function mapReporteSeguimiento(row: ReporteSeguimientoRow): ReporteSeguimiento {
     tareas_atrasadas: normalizeNumber(row.tareas_atrasadas),
     tareas_sin_fecha: normalizeNumber(row.tareas_sin_fecha),
     tareas_en_plazo: normalizeNumber(row.tareas_en_plazo),
+    kpis: normalizeKpis(row.kpis),
+    kpi_cumplimiento_cronograma: normalizeOptionalNumber(row.kpi_cumplimiento_cronograma),
+    kpi_tasa_defectos: normalizeOptionalNumber(row.kpi_tasa_defectos),
+    kpi_productividad_equipo: normalizeOptionalNumber(row.kpi_productividad_equipo),
+    kpi_cumplimiento_requerimientos: normalizeOptionalNumber(row.kpi_cumplimiento_requerimientos),
+    kpi_eficiencia_flujo: normalizeOptionalNumber(row.kpi_eficiencia_flujo),
     html_reporte: row.html_reporte ?? null,
     mensaje_html: row.mensaje_html ?? null,
     archivo_nombre: row.archivo_nombre ?? null,
@@ -108,6 +114,30 @@ function normalizeNumber(value: unknown): number {
   }
 
   return 0;
+}
+
+function normalizeOptionalNumber(value: unknown): number | null {
+  if (value == null) return null;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const numericValue = Number(value);
+    if (Number.isFinite(numericValue)) return numericValue;
+  }
+
+  return null;
+}
+
+function normalizeKpis(value: unknown): ReporteSeguimiento["kpis"] {
+  if (value == null) return null;
+  if (Array.isArray(value)) {
+    return value.filter(
+      (item): item is Record<string, unknown> =>
+        item != null && typeof item === "object" && !Array.isArray(item),
+    );
+  }
+  if (typeof value === "object") return value as Record<string, unknown>;
+
+  return null;
 }
 
 function normalizeEstado(value: unknown): ReporteSeguimientoEstado {

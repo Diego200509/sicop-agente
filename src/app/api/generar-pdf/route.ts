@@ -25,6 +25,12 @@ type ReportMetadata = {
   tareas_atrasadas?: number;
   tareas_sin_fecha?: number;
   tareas_en_plazo?: number;
+  kpis?: unknown;
+  kpi_cumplimiento_cronograma?: number | string;
+  kpi_tasa_defectos?: number | string;
+  kpi_productividad_equipo?: number | string;
+  kpi_cumplimiento_requerimientos?: number | string;
+  kpi_eficiencia_flujo?: number | string;
   enviado_a?: string;
   destinatarios?: string;
   asunto?: string;
@@ -36,6 +42,12 @@ type GeneratePdfPayload = {
   html?: string;
   filename?: string;
   metadata?: ReportMetadata;
+  kpis?: unknown;
+  kpi_cumplimiento_cronograma?: number | string;
+  kpi_tasa_defectos?: number | string;
+  kpi_productividad_equipo?: number | string;
+  kpi_cumplimiento_requerimientos?: number | string;
+  kpi_eficiencia_flujo?: number | string;
 };
 
 type InlineSegment = {
@@ -249,8 +261,9 @@ export async function POST(request: Request) {
       );
     }
 
+    const metadata = normalizePayloadMetadata(payload);
     const filename = sanitizeFilename(payload.filename);
-    const fechaRevision = resolveFechaRevision(payload.metadata);
+    const fechaRevision = resolveFechaRevision(metadata);
     const blocks = parseHtmlToReportBlocks(html);
     const pdfBuffer = await renderReportPdf(blocks, fechaRevision);
 
@@ -259,7 +272,7 @@ export async function POST(request: Request) {
       html,
       filename,
       fechaRevision,
-      metadata: payload.metadata,
+      metadata,
       pdfBuffer,
     });
 
@@ -652,6 +665,34 @@ function normalizeText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
+function normalizePayloadMetadata(payload: GeneratePdfPayload): ReportMetadata | undefined {
+  const metadata: ReportMetadata = { ...(payload.metadata ?? {}) };
+  const topLevelKpiKeys: Array<keyof Pick<
+    GeneratePdfPayload,
+    | "kpi_cumplimiento_cronograma"
+    | "kpi_tasa_defectos"
+    | "kpi_productividad_equipo"
+    | "kpi_cumplimiento_requerimientos"
+    | "kpi_eficiencia_flujo"
+  >> = [
+    "kpi_cumplimiento_cronograma",
+    "kpi_tasa_defectos",
+    "kpi_productividad_equipo",
+    "kpi_cumplimiento_requerimientos",
+    "kpi_eficiencia_flujo",
+  ];
+
+  if (payload.kpis !== undefined) metadata.kpis = payload.kpis;
+
+  for (const key of topLevelKpiKeys) {
+    if (payload[key] !== undefined) {
+      metadata[key] = payload[key];
+    }
+  }
+
+  return Object.keys(metadata).length > 0 ? metadata : undefined;
+}
+
 async function persistGeneratedReport({
   title,
   html,
@@ -723,6 +764,12 @@ async function persistGeneratedReport({
       tareas_atrasadas: getMetadataNumber(metadata, "tareas_atrasadas"),
       tareas_sin_fecha: getMetadataNumber(metadata, "tareas_sin_fecha"),
       tareas_en_plazo: getMetadataNumber(metadata, "tareas_en_plazo"),
+      kpis: getMetadataKpis(metadata),
+      kpi_cumplimiento_cronograma: getMetadataOptionalNumber(metadata, "kpi_cumplimiento_cronograma"),
+      kpi_tasa_defectos: getMetadataOptionalNumber(metadata, "kpi_tasa_defectos"),
+      kpi_productividad_equipo: getMetadataOptionalNumber(metadata, "kpi_productividad_equipo"),
+      kpi_cumplimiento_requerimientos: getMetadataOptionalNumber(metadata, "kpi_cumplimiento_requerimientos"),
+      kpi_eficiencia_flujo: getMetadataOptionalNumber(metadata, "kpi_eficiencia_flujo"),
       html_reporte: html,
       mensaje_html: html,
       archivo_nombre: filename,
@@ -764,12 +811,27 @@ function getMetadataNumber(
   return fallback;
 }
 
+function getMetadataOptionalNumber(metadata: ReportMetadata | undefined, key: keyof ReportMetadata): number | null {
+  const value = metadata?.[key];
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const numericValue = Number(value);
+    if (Number.isFinite(numericValue)) return numericValue;
+  }
+
+  return null;
+}
+
 function getMetadataString(metadata: ReportMetadata | undefined, key: keyof ReportMetadata): string | null {
   const value = metadata?.[key];
   if (typeof value !== "string") return null;
 
   const text = normalizeText(value);
   return text ? text : null;
+}
+
+function getMetadataKpis(metadata: ReportMetadata | undefined): unknown {
+  return metadata?.kpis ?? null;
 }
 
 function formatErrorMessage(prefix: string, error: unknown): string {

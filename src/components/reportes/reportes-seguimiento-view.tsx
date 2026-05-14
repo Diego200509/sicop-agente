@@ -42,6 +42,57 @@ import type {
 type DetailTab = "pdf" | "html" | "metadata";
 const TOTAL_TAREAS_ANALIZADAS = 22;
 
+type KpiField =
+  | "kpi_cumplimiento_cronograma"
+  | "kpi_tasa_defectos"
+  | "kpi_productividad_equipo"
+  | "kpi_cumplimiento_requerimientos"
+  | "kpi_eficiencia_flujo";
+
+type KpiDisplayItem = {
+  id: KpiField;
+  nombre: string;
+  valor: number | null;
+  formula?: string;
+  calculo?: string;
+};
+
+const kpiDefinitions: Array<{
+  field: KpiField;
+  label: string;
+  aliases: string[];
+}> = [
+  {
+    field: "kpi_cumplimiento_cronograma",
+    label: "Cumplimiento del cronograma",
+    aliases: ["cumplimiento_cronograma", "kpi_cumplimiento_cronograma", "cumplimientoCronograma"],
+  },
+  {
+    field: "kpi_tasa_defectos",
+    label: "Tasa de defectos",
+    aliases: ["tasa_defectos", "kpi_tasa_defectos", "tasaDefectos"],
+  },
+  {
+    field: "kpi_productividad_equipo",
+    label: "Productividad del equipo",
+    aliases: ["productividad_equipo", "kpi_productividad_equipo", "productividadEquipo"],
+  },
+  {
+    field: "kpi_cumplimiento_requerimientos",
+    label: "Cumplimiento de requerimientos",
+    aliases: [
+      "cumplimiento_requerimientos",
+      "kpi_cumplimiento_requerimientos",
+      "cumplimientoRequerimientos",
+    ],
+  },
+  {
+    field: "kpi_eficiencia_flujo",
+    label: "Eficiencia del flujo",
+    aliases: ["eficiencia_flujo", "kpi_eficiencia_flujo", "eficienciaFlujo"],
+  },
+];
+
 const estadoOptions = [
   { value: "todos", label: "Todos" },
   { value: "generado", label: "Generado" },
@@ -404,6 +455,41 @@ function SecondaryMetric({ label, value }: { label: string; value: number }) {
   );
 }
 
+function KpiCard({ item }: { item: KpiDisplayItem }) {
+  return (
+    <div className="rounded-md border border-zinc-200 bg-zinc-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">{item.nombre}</p>
+          <p className="mt-1 text-2xl font-bold tabular-nums text-zinc-950 dark:text-zinc-50">
+            {formatKpiPercent(item.valor)}
+          </p>
+        </div>
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-200">
+          <CheckCircle2 className="size-5" aria-hidden />
+        </div>
+      </div>
+
+      {item.formula || item.calculo ? (
+        <div className="mt-3 space-y-2 border-t border-zinc-200 pt-3 text-xs leading-relaxed dark:border-zinc-800">
+          {item.formula ? (
+            <div>
+              <p className="font-semibold uppercase text-zinc-500 dark:text-zinc-400">Fórmula</p>
+              <p className="mt-0.5 text-zinc-700 dark:text-zinc-300">{item.formula}</p>
+            </div>
+          ) : null}
+          {item.calculo ? (
+            <div>
+              <p className="font-semibold uppercase text-zinc-500 dark:text-zinc-400">Cálculo</p>
+              <p className="mt-0.5 text-zinc-700 dark:text-zinc-300">{item.calculo}</p>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function ReporteDetalleModal({
   reporte,
   activeTab,
@@ -417,6 +503,7 @@ function ReporteDetalleModal({
 }) {
   const html = reporte.mensaje_html || reporte.html_reporte || "";
   const metadataText = useMemo(() => JSON.stringify(reporte.metadata ?? {}, null, 2), [reporte.metadata]);
+  const kpiItems = useMemo(() => buildKpiItems(reporte), [reporte]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -470,6 +557,29 @@ function ReporteDetalleModal({
               value={key === "total_tareas" ? TOTAL_TAREAS_ANALIZADAS : reporte[key]}
             />
           ))}
+        </div>
+
+        <div className="space-y-3 border-b border-zinc-200 p-4 dark:border-zinc-800">
+          <div>
+            <h3 className="text-base font-semibold text-zinc-950 dark:text-zinc-50">
+              Indicadores Clave de Desempeño (KPI)
+            </h3>
+            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+              Valores calculados para este reporte de seguimiento.
+            </p>
+          </div>
+
+          {kpiItems.length > 0 ? (
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {kpiItems.map((item) => (
+                <KpiCard key={item.id} item={item} />
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-md border border-dashed border-zinc-200 px-4 py-5 text-sm text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+              Este reporte no tiene KPIs registrados. La vista conserva compatibilidad con reportes antiguos.
+            </div>
+          )}
         </div>
 
         <div className="flex flex-col gap-3 border-b border-zinc-200 p-4 dark:border-zinc-800 lg:flex-row lg:items-center lg:justify-between">
@@ -621,6 +731,108 @@ function TabButton({
       {children}
     </button>
   );
+}
+
+function buildKpiItems(reporte: ReporteSeguimiento): KpiDisplayItem[] {
+  return kpiDefinitions
+    .flatMap((definition) => {
+      const source = findKpiSource(reporte.kpis, definition.aliases);
+      const valor = reporte[definition.field] ?? getNumericKpiValue(source);
+      const formula = getTextFromRecord(source, ["formula", "fórmula"]);
+      const calculo = getTextFromRecord(source, ["calculo", "cálculo", "calculation", "detalle", "explicacion"]);
+      const nombre = getTextFromRecord(source, ["nombre", "name", "label", "titulo"]) ?? definition.label;
+
+      if (valor == null && !source) return [];
+
+      const item: KpiDisplayItem = {
+        id: definition.field,
+        nombre,
+        valor,
+        formula,
+        calculo,
+      };
+
+      return [item];
+    });
+}
+
+function findKpiSource(
+  kpis: ReporteSeguimiento["kpis"],
+  aliases: string[],
+): Record<string, unknown> | null {
+  if (!kpis) return null;
+
+  const normalizedAliases = aliases.map(normalizeKpiKey);
+
+  if (Array.isArray(kpis)) {
+    return (
+      kpis.find((item) => {
+        const candidate =
+          getTextFromRecord(item, ["id", "key", "codigo", "nombre", "name", "label", "titulo"]) ?? "";
+        return normalizedAliases.includes(normalizeKpiKey(candidate));
+      }) ?? null
+    );
+  }
+
+  for (const [key, value] of Object.entries(kpis)) {
+    if (!normalizedAliases.includes(normalizeKpiKey(key))) continue;
+
+    if (value != null && typeof value === "object" && !Array.isArray(value)) {
+      return value as Record<string, unknown>;
+    }
+
+    return { valor: value };
+  }
+
+  return null;
+}
+
+function getNumericKpiValue(source: Record<string, unknown> | null): number | null {
+  if (!source) return null;
+
+  for (const key of ["valor", "value", "porcentaje", "percentage", "resultado", "resultado_porcentaje"]) {
+    const value = source[key];
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "string") {
+      const normalizedValue = Number(value.replace("%", "").replace(",", ".").trim());
+      if (Number.isFinite(normalizedValue)) return normalizedValue;
+    }
+  }
+
+  return null;
+}
+
+function getTextFromRecord(source: Record<string, unknown> | null, keys: string[]): string | undefined {
+  if (!source) return undefined;
+
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+
+  return undefined;
+}
+
+function normalizeKpiKey(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/^kpi_/, "")
+    .replace(/[^a-zA-Z0-9]+/g, "_")
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .toLowerCase()
+    .replace(/^_+|_+$/g, "");
+}
+
+function formatKpiPercent(value: number | null): string {
+  if (value == null) return "N/D";
+  const percentValue = Math.abs(value) <= 1 ? value * 100 : value;
+
+  return `${new Intl.NumberFormat("es-EC", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: Number.isInteger(percentValue) ? 0 : 1,
+  }).format(percentValue)}%`;
 }
 
 function formatDateEcuador(
