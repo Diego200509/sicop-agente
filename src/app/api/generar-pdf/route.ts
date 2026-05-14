@@ -62,6 +62,55 @@ type ReportBlock =
   | { type: "table"; rows: InlineSegment[][][] }
   | { type: "divider" };
 
+type PdfKpiField =
+  | "kpi_cumplimiento_cronograma"
+  | "kpi_tasa_defectos"
+  | "kpi_productividad_equipo"
+  | "kpi_cumplimiento_requerimientos"
+  | "kpi_eficiencia_flujo";
+
+type PdfKpiItem = {
+  field: PdfKpiField;
+  nombre: string;
+  valor: string;
+};
+
+const KPI_DEFINITIONS: Array<{
+  field: PdfKpiField;
+  label: string;
+  aliases: string[];
+}> = [
+  {
+    field: "kpi_cumplimiento_cronograma",
+    label: "Cumplimiento del cronograma",
+    aliases: ["cumplimiento_cronograma", "kpi_cumplimiento_cronograma", "cumplimientoCronograma"],
+  },
+  {
+    field: "kpi_tasa_defectos",
+    label: "Tasa de defectos",
+    aliases: ["tasa_defectos", "kpi_tasa_defectos", "tasaDefectos"],
+  },
+  {
+    field: "kpi_productividad_equipo",
+    label: "Productividad del equipo",
+    aliases: ["productividad_equipo", "kpi_productividad_equipo", "productividadEquipo"],
+  },
+  {
+    field: "kpi_cumplimiento_requerimientos",
+    label: "Cumplimiento de requerimientos",
+    aliases: [
+      "cumplimiento_requerimientos",
+      "kpi_cumplimiento_requerimientos",
+      "cumplimientoRequerimientos",
+    ],
+  },
+  {
+    field: "kpi_eficiencia_flujo",
+    label: "Eficiencia del flujo",
+    aliases: ["eficiencia_flujo", "kpi_eficiencia_flujo", "eficienciaFlujo"],
+  },
+];
+
 const DEFAULT_FILENAME = "reporte-seguimiento-sicop.pdf";
 const STORAGE_BUCKET = "reportes-pdf";
 const REPORT_RECORD_TITLE = "Reporte automático de seguimiento SICOP";
@@ -142,6 +191,57 @@ const styles = StyleSheet.create({
   dateText: {
     fontSize: 13,
     color: "#1f2937",
+  },
+  kpiSection: {
+    marginBottom: 24,
+    padding: 18,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#dbe3ef",
+    backgroundColor: "#f8fafc",
+  },
+  kpiSectionTitle: {
+    marginBottom: 6,
+    paddingBottom: 6,
+    borderBottomWidth: 2,
+    borderBottomColor: ACCENT_BLUE,
+    fontSize: 18,
+    fontFamily: "Helvetica-Bold",
+    color: PRIMARY_BLUE,
+  },
+  kpiSectionDescription: {
+    marginBottom: 14,
+    fontSize: 11,
+    lineHeight: 1.45,
+    color: "#475569",
+  },
+  kpiGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  kpiCard: {
+    width: "48%",
+    minHeight: 78,
+    paddingTop: 12,
+    paddingRight: 14,
+    paddingBottom: 12,
+    paddingLeft: 14,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: "#dbe3ef",
+    backgroundColor: "#ffffff",
+  },
+  kpiName: {
+    marginBottom: 8,
+    fontSize: 11,
+    fontFamily: "Helvetica-Bold",
+    color: PRIMARY_BLUE,
+  },
+  kpiValue: {
+    fontSize: 24,
+    fontFamily: "Helvetica-Bold",
+    color: "#0284c7",
   },
   bold: {
     fontFamily: "Helvetica-Bold",
@@ -265,7 +365,8 @@ export async function POST(request: Request) {
     const filename = sanitizeFilename(payload.filename);
     const fechaRevision = resolveFechaRevision(metadata);
     const blocks = parseHtmlToReportBlocks(html);
-    const pdfBuffer = await renderReportPdf(blocks, fechaRevision);
+    const kpiItems = buildPdfKpiItems(metadata);
+    const pdfBuffer = await renderReportPdf(blocks, fechaRevision, kpiItems);
 
     await persistGeneratedReport({
       title: REPORT_RECORD_TITLE,
@@ -301,6 +402,7 @@ function parseHtmlToReportBlocks(html: string): ReportBlock[] {
   container
     .querySelectorAll("script, style, noscript, .pdf-header, .fecha-box, .footer")
     .forEach((node) => node.remove());
+  removeIncomingKpiSections(container);
 
   const blocks: ReportBlock[] = [];
   container.childNodes.forEach((node) => appendNodeBlocks(node, blocks));
@@ -311,6 +413,25 @@ function parseHtmlToReportBlocks(html: string): ReportBlock[] {
   }
 
   return blocks;
+}
+
+function removeIncomingKpiSections(container: HTMLElement) {
+  container.querySelectorAll("h1, h2, h3").forEach((heading) => {
+    if (!isKpiSectionTitle(heading.text)) return;
+
+    const parent = heading.parentNode;
+    if (
+      parent instanceof HTMLElement &&
+      parent !== container &&
+      !["body", "html"].includes(parent.tagName.toLowerCase()) &&
+      parent.querySelectorAll("h1, h2, h3").length === 1
+    ) {
+      parent.remove();
+      return;
+    }
+
+    heading.remove();
+  });
 }
 
 function appendNodeBlocks(node: HtmlNode, blocks: ReportBlock[]) {
@@ -465,9 +586,10 @@ function getLogoDataUri(): Promise<string | null> {
 async function renderReportPdf(
   blocks: ReportBlock[],
   fechaRevision: string,
+  kpiItems: PdfKpiItem[],
 ): Promise<ArrayBuffer> {
   const logoDataUri = await getLogoDataUri();
-  const document = ReportPdfDocument({ blocks, fechaRevision, logoDataUri });
+  const document = ReportPdfDocument({ blocks, fechaRevision, logoDataUri, kpiItems });
 
   return pdf(document)
     .toBlob()
@@ -478,10 +600,12 @@ function ReportPdfDocument({
   blocks,
   fechaRevision,
   logoDataUri,
+  kpiItems,
 }: {
   blocks: ReportBlock[];
   fechaRevision: string;
   logoDataUri: string | null;
+  kpiItems: PdfKpiItem[];
 }): ReactElement<React.ComponentProps<typeof Document>> {
   return React.createElement(
     Document,
@@ -525,6 +649,7 @@ function ReportPdfDocument({
           fechaRevision,
         ),
       ),
+      ...(kpiItems.length > 0 ? [renderPdfKpiSection(kpiItems)] : []),
       ...blocks.map(renderBlock),
       React.createElement(Text, {
         fixed: true,
@@ -603,6 +728,35 @@ function renderBlock(block: ReportBlock, index: number): ReactElement {
   return React.createElement(View, { key: `divider-${index}`, style: styles.divider });
 }
 
+function renderPdfKpiSection(kpiItems: PdfKpiItem[]): ReactElement {
+  return React.createElement(
+    View,
+    { key: "kpi-section", style: styles.kpiSection, wrap: false },
+    React.createElement(
+      Text,
+      { style: styles.kpiSectionTitle },
+      "Indicadores Clave de Desempeño (KPI)",
+    ),
+    React.createElement(
+      Text,
+      { style: styles.kpiSectionDescription },
+      "Indicadores calculados dinámicamente con base en el estado actual del tablero Trello y los datos de seguimiento del proyecto.",
+    ),
+    React.createElement(
+      View,
+      { style: styles.kpiGrid },
+      ...kpiItems.map((item) =>
+        React.createElement(
+          View,
+          { key: item.field, style: styles.kpiCard },
+          React.createElement(Text, { style: styles.kpiName }, item.nombre),
+          React.createElement(Text, { style: styles.kpiValue }, item.valor),
+        ),
+      ),
+    ),
+  );
+}
+
 function renderInlineSegments(segments: InlineSegment[], keyPrefix: string): ReactElement[] {
   return segments.map((segment, index) => {
     if (segment.href) {
@@ -643,6 +797,15 @@ function isDuplicatedBackendHeader(value: string): boolean {
     text.includes("reporte automatico") ||
     text.includes("reporte automático") ||
     text.includes("proyecto sicop")
+  );
+}
+
+function isKpiSectionTitle(value: string): boolean {
+  const text = normalizeKpiKey(value);
+  return (
+    text.includes("indicadores_clave_de_desempeno") ||
+    text.includes("kpi") ||
+    text.includes("desempeno_kpi")
   );
 }
 
@@ -691,6 +854,108 @@ function normalizePayloadMetadata(payload: GeneratePdfPayload): ReportMetadata |
   }
 
   return Object.keys(metadata).length > 0 ? metadata : undefined;
+}
+
+function buildPdfKpiItems(metadata?: ReportMetadata): PdfKpiItem[] {
+  return KPI_DEFINITIONS.flatMap((definition) => {
+    const source = findKpiSource(metadata?.kpis, definition.aliases);
+    const rawValue = metadata?.[definition.field] ?? getKpiSourceValue(source);
+    const valor = formatKpiValue(rawValue);
+    const nombre = getTextFromKpiSource(source, ["nombre", "name", "label", "titulo"]) ?? definition.label;
+
+    if (!valor && !source) return [];
+
+    return [
+      {
+        field: definition.field,
+        nombre,
+        valor: valor ?? "N/D",
+      },
+    ];
+  });
+}
+
+function findKpiSource(kpis: unknown, aliases: string[]): Record<string, unknown> | null {
+  if (!kpis) return null;
+  const normalizedAliases = aliases.map(normalizeKpiKey);
+
+  if (Array.isArray(kpis)) {
+    return (
+      kpis.find((item): item is Record<string, unknown> => {
+        if (item == null || typeof item !== "object" || Array.isArray(item)) return false;
+        const record = item as Record<string, unknown>;
+        const candidate = getTextFromKpiSource(record, ["id", "key", "codigo", "nombre", "name", "label", "titulo"]);
+        return candidate ? normalizedAliases.includes(normalizeKpiKey(candidate)) : false;
+      }) ?? null
+    );
+  }
+
+  if (typeof kpis !== "object") return null;
+
+  for (const [key, value] of Object.entries(kpis as Record<string, unknown>)) {
+    if (!normalizedAliases.includes(normalizeKpiKey(key))) continue;
+    if (value != null && typeof value === "object" && !Array.isArray(value)) {
+      return value as Record<string, unknown>;
+    }
+    return { valor: value };
+  }
+
+  return null;
+}
+
+function getKpiSourceValue(source: Record<string, unknown> | null): unknown {
+  if (!source) return null;
+
+  for (const key of ["resultado", "valor", "value", "porcentaje", "percentage", "resultado_porcentaje"]) {
+    if (source[key] !== undefined) return source[key];
+  }
+
+  return null;
+}
+
+function getTextFromKpiSource(source: Record<string, unknown> | null, keys: string[]): string | null {
+  if (!source) return null;
+
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+
+  return null;
+}
+
+function formatKpiValue(value: unknown): string | null {
+  if (typeof value === "string") {
+    const text = value.trim();
+    if (!text) return null;
+    if (text.includes("%")) return text;
+    const numericValue = Number(text.replace(",", "."));
+    if (Number.isFinite(numericValue)) return formatKpiNumber(numericValue);
+    return text;
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) return formatKpiNumber(value);
+  return null;
+}
+
+function formatKpiNumber(value: number): string {
+  const percentValue = Math.abs(value) <= 1 ? value * 100 : value;
+  return `${new Intl.NumberFormat("es-EC", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: Number.isInteger(percentValue) ? 0 : 1,
+  }).format(percentValue)}%`;
+}
+
+function normalizeKpiKey(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/[^a-zA-Z0-9]+/g, "_")
+    .toLowerCase()
+    .replace(/^kpi_/, "")
+    .replace(/^_+|_+$/g, "");
 }
 
 async function persistGeneratedReport({

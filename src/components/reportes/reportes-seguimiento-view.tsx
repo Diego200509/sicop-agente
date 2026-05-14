@@ -470,7 +470,7 @@ function KpiCard({ item }: { item: KpiDisplayItem }) {
         </div>
       </div>
 
-      {item.formula || item.calculo ? (
+      {false ? (
         <div className="mt-3 space-y-2 border-t border-zinc-200 pt-3 text-xs leading-relaxed dark:border-zinc-800">
           {item.formula ? (
             <div>
