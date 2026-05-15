@@ -14,7 +14,14 @@ import {
 import { cn } from "@/src/lib/utils";
 import type { ReporteSeguimiento } from "@/src/types/reporte-seguimiento";
 
-type BudgetStatus = "ahorro" | "exacto" | "sobrecosto" | "sin_datos" | string;
+type BudgetStatus =
+  | "ahorro"
+  | "dentro_presupuesto"
+  | "en_ejecucion"
+  | "exacto"
+  | "sobrecosto"
+  | "sin_datos"
+  | string;
 type BudgetRecord = Record<string, unknown>;
 
 const budgetNumberFormat = new Intl.NumberFormat("es-EC", {
@@ -47,7 +54,7 @@ export function BudgetSection({ reporte }: { reporte: ReporteSeguimiento }) {
         <div>
           <h3 className="text-base font-semibold text-zinc-950 dark:text-zinc-50">Presupuesto</h3>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            Control presupuestario registrado para este reporte de seguimiento.
+            Control presupuestario registrado contra el presupuesto inicial total del proyecto.
           </p>
         </div>
         <BudgetStatusBadge estado={reporte.estado_presupuesto ?? "sin_datos"} />
@@ -69,25 +76,25 @@ export function BudgetSection({ reporte }: { reporte: ReporteSeguimiento }) {
 export function BudgetSummaryCards({ reporte }: { reporte: ReporteSeguimiento }) {
   const items = [
     {
-      label: "Presupuesto estimado",
+      label: "Presupuesto estimado total del proyecto",
       value: formatMoney(reporte.presupuesto_total ?? 0),
       icon: PiggyBank,
       tone: "sky",
     },
     {
-      label: "Costo real",
+      label: "Costo real acumulado",
       value: formatMoney(reporte.costo_real_total ?? 0),
       icon: ReceiptText,
       tone: "zinc",
     },
     {
-      label: "Variacion de costo",
+      label: "Variacion o saldo disponible",
       value: formatMoney(reporte.variacion_costo ?? 0),
       icon: LineChart,
       tone: getBudgetTone(reporte.estado_presupuesto),
     },
     {
-      label: "Ejecucion presupuestaria",
+      label: "Ejecucion presupuestaria real",
       value: `${formatPercent(reporte.ejecucion_presupuestaria ?? 0)}%`,
       icon: Gauge,
       tone: getExecutionTone(reporte.ejecucion_presupuestaria ?? 0),
@@ -132,7 +139,7 @@ export function BudgetProgressBar({ value }: { value: number | null | undefined 
   return (
     <div className="space-y-2 rounded-md border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950/30">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Ejecucion presupuestaria</p>
+        <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Ejecucion presupuestaria real</p>
         <p className={cn("text-sm font-semibold tabular-nums", hasOverrun ? "text-rose-600 dark:text-rose-300" : "text-zinc-700 dark:text-zinc-200")}>
           {formatPercent(percent)}% ejecutado
         </p>
@@ -173,7 +180,7 @@ export function BudgetStatusBadge({ estado }: { estado: BudgetStatus }) {
       ? "success"
       : normalized === "sobrecosto"
         ? "danger"
-        : normalized === "exacto"
+        : normalized === "dentro_presupuesto" || normalized === "en_ejecucion"
           ? "secondary"
           : "info";
 
@@ -357,14 +364,16 @@ function normalizeBudgetStatus(estado: BudgetStatus): string {
   if (typeof estado !== "string") return "sin_datos";
 
   const normalized = estado.trim().toLowerCase();
-  return normalized || "sin_datos";
+  if (!normalized) return "sin_datos";
+  if (normalized === "exacto") return "en_ejecucion";
+  return normalized;
 }
 
 function getBudgetTone(estado: BudgetStatus | null | undefined): "emerald" | "blue" | "rose" | "sky" {
   const normalized = normalizeBudgetStatus(estado ?? "sin_datos");
-  if (normalized === "ahorro") return "emerald";
+  if (normalized === "ahorro" || normalized === "dentro_presupuesto") return "emerald";
   if (normalized === "sobrecosto") return "rose";
-  if (normalized === "exacto") return "blue";
+  if (normalized === "en_ejecucion") return "blue";
   return "sky";
 }
 

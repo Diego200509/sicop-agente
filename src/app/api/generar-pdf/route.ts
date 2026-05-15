@@ -914,11 +914,14 @@ function renderPdfBudgetSection(budgetInfo: PdfBudgetInfo, index: number): React
   const progressWidth = `${Math.max(0, Math.min(budgetInfo.ejecucionPresupuestaria, 100))}%`;
   const hasOverrun = budgetInfo.ejecucionPresupuestaria > 100;
   const summaryItems = [
-    { label: "Presupuesto estimado", value: formatBudgetPdfMoney(budgetInfo.presupuestoTotal) },
-    { label: "Costo real", value: formatBudgetPdfMoney(budgetInfo.costoRealTotal) },
-    { label: "Variacion de costo", value: formatBudgetPdfMoney(budgetInfo.variacionCosto) },
     {
-      label: "Ejecucion presupuestaria",
+      label: "Presupuesto estimado total del proyecto",
+      value: formatBudgetPdfMoney(budgetInfo.presupuestoTotal),
+    },
+    { label: "Costo real acumulado", value: formatBudgetPdfMoney(budgetInfo.costoRealTotal) },
+    { label: "Variacion o saldo disponible", value: formatBudgetPdfMoney(budgetInfo.variacionCosto) },
+    {
+      label: "Ejecucion presupuestaria real",
       value: `${formatBudgetPdfPercent(budgetInfo.ejecucionPresupuestaria)}% ejecutado`,
     },
     { label: "Estado presupuestario", value: budgetInfo.estadoPresupuesto.replace(/_/g, " ") },
@@ -931,7 +934,7 @@ function renderPdfBudgetSection(budgetInfo: PdfBudgetInfo, index: number): React
     React.createElement(
       Text,
       { style: styles.budgetSectionDescription },
-      "Control presupuestario registrado en reportes_seguimiento para el proyecto SICOP.",
+      "Control presupuestario registrado contra el presupuesto inicial total del proyecto SICOP.",
     ),
     React.createElement(
       View,
@@ -948,7 +951,7 @@ function renderPdfBudgetSection(budgetInfo: PdfBudgetInfo, index: number): React
     React.createElement(
       Text,
       { style: styles.budgetCardLabel },
-      `Ejecucion presupuestaria: ${formatBudgetPdfPercent(budgetInfo.ejecucionPresupuestaria)}% ejecutado`,
+      `Ejecucion presupuestaria real: ${formatBudgetPdfPercent(budgetInfo.ejecucionPresupuestaria)}% ejecutado`,
     ),
     React.createElement(
       View,
@@ -1221,12 +1224,33 @@ function buildPdfBudgetInfo(metadata?: ReportMetadata): PdfBudgetInfo | null {
   if (!hasBudgetMetadata(metadata)) return null;
 
   const presupuesto = getMetadataPresupuesto(metadata);
+  const presupuestoTotal = getBudgetMetadataNumber(metadata, [
+    "presupuesto_total",
+    "presupuesto_inicial_total",
+    "presupuesto_inicial",
+    "presupuesto_total_proyecto",
+    "presupuesto_estimado_total",
+  ]);
+  const costoRealTotal = getBudgetMetadataNumber(metadata, [
+    "costo_real_total",
+    "costo_real_acumulado",
+    "costo_total_real",
+  ]);
+  const variacionCosto = presupuestoTotal - costoRealTotal;
+  const ejecucionPresupuestaria =
+    presupuestoTotal > 0 ? roundBudgetNumber((costoRealTotal / presupuestoTotal) * 100) : 0;
+
   return {
-    presupuestoTotal: getBudgetMetadataNumber(metadata, "presupuesto_total"),
-    costoRealTotal: getBudgetMetadataNumber(metadata, "costo_real_total"),
-    variacionCosto: getBudgetMetadataNumber(metadata, "variacion_costo"),
-    ejecucionPresupuestaria: getBudgetMetadataNumber(metadata, "ejecucion_presupuestaria"),
-    estadoPresupuesto: getBudgetMetadataString(metadata, "estado_presupuesto") ?? "sin_datos",
+    presupuestoTotal,
+    costoRealTotal,
+    variacionCosto: roundBudgetNumber(variacionCosto),
+    ejecucionPresupuestaria,
+    estadoPresupuesto: resolveBudgetStatus(
+      getBudgetMetadataString(metadata, "estado_presupuesto"),
+      presupuestoTotal,
+      costoRealTotal,
+      variacionCosto,
+    ),
     ...(getBudgetRecordText(presupuesto, [
       "interpretacion",
       "interpretaci\u00f3n",
@@ -1254,7 +1278,13 @@ function hasBudgetMetadata(metadata?: ReportMetadata): boolean {
   return [
     "presupuesto",
     "presupuesto_total",
+    "presupuesto_inicial_total",
+    "presupuesto_inicial",
+    "presupuesto_total_proyecto",
+    "presupuesto_estimado_total",
     "costo_real_total",
+    "costo_real_acumulado",
+    "costo_total_real",
     "variacion_costo",
     "ejecucion_presupuestaria",
     "estado_presupuesto",
@@ -1443,11 +1473,7 @@ async function persistGeneratedReport({
       kpi_cumplimiento_requerimientos: getMetadataOptionalNumber(metadata, "kpi_cumplimiento_requerimientos"),
       kpi_eficiencia_flujo: getMetadataOptionalNumber(metadata, "kpi_eficiencia_flujo"),
       presupuesto: getMetadataPresupuesto(metadata),
-      presupuesto_total: getBudgetMetadataNumber(metadata, "presupuesto_total"),
-      costo_real_total: getBudgetMetadataNumber(metadata, "costo_real_total"),
-      variacion_costo: getBudgetMetadataNumber(metadata, "variacion_costo"),
-      ejecucion_presupuestaria: getBudgetMetadataNumber(metadata, "ejecucion_presupuestaria"),
-      estado_presupuesto: getBudgetMetadataString(metadata, "estado_presupuesto") ?? "sin_datos",
+      ...buildBudgetPersistenceFields(metadata),
       html_reporte: html,
       mensaje_html: html,
       archivo_nombre: filename,
@@ -1519,14 +1545,46 @@ function getMetadataPresupuesto(metadata: ReportMetadata | undefined): Record<st
     : null;
 }
 
-function getBudgetMetadataNumber(metadata: ReportMetadata | undefined, key: keyof ReportMetadata): number {
-  const directValue = metadata?.[key];
-  const directNumber = normalizeBudgetNumber(directValue);
-  if (directNumber !== null) return directNumber;
+function buildBudgetPersistenceFields(metadata: ReportMetadata | undefined) {
+  const presupuestoTotal = getBudgetMetadataNumber(metadata, [
+    "presupuesto_total",
+    "presupuesto_inicial_total",
+    "presupuesto_inicial",
+    "presupuesto_total_proyecto",
+    "presupuesto_estimado_total",
+  ]);
+  const costoRealTotal = getBudgetMetadataNumber(metadata, [
+    "costo_real_total",
+    "costo_real_acumulado",
+    "costo_total_real",
+  ]);
+  const variacionCosto = roundBudgetNumber(presupuestoTotal - costoRealTotal);
+  const ejecucionPresupuestaria =
+    presupuestoTotal > 0 ? roundBudgetNumber((costoRealTotal / presupuestoTotal) * 100) : 0;
 
-  const presupuesto = getMetadataPresupuesto(metadata);
-  const nestedNumber = normalizeBudgetNumber(presupuesto?.[key as string]);
-  if (nestedNumber !== null) return nestedNumber;
+  return {
+    presupuesto_total: presupuestoTotal,
+    costo_real_total: costoRealTotal,
+    variacion_costo: variacionCosto,
+    ejecucion_presupuestaria: ejecucionPresupuestaria,
+    estado_presupuesto: resolveBudgetStatus(
+      getBudgetMetadataString(metadata, "estado_presupuesto"),
+      presupuestoTotal,
+      costoRealTotal,
+      variacionCosto,
+    ),
+  };
+}
+
+function getBudgetMetadataNumber(metadata: ReportMetadata | undefined, keys: Array<keyof ReportMetadata | string>): number {
+  for (const key of keys) {
+    const directNumber = normalizeBudgetNumber(metadata?.[key]);
+    if (directNumber !== null) return directNumber;
+
+    const presupuesto = getMetadataPresupuesto(metadata);
+    const nestedNumber = normalizeBudgetNumber(presupuesto?.[key]);
+    if (nestedNumber !== null) return nestedNumber;
+  }
 
   return 0;
 }
@@ -1540,6 +1598,25 @@ function getBudgetMetadataString(metadata: ReportMetadata | undefined, key: keyo
   if (typeof nestedValue === "string" && nestedValue.trim()) return nestedValue.trim();
 
   return null;
+}
+
+function resolveBudgetStatus(
+  storedStatus: string | null,
+  presupuestoTotal: number,
+  costoRealTotal: number,
+  variacionCosto: number,
+): string {
+  const normalizedStatus = storedStatus?.trim().toLowerCase() ?? "";
+
+  if (presupuestoTotal <= 0) return "sin_datos";
+  if (costoRealTotal > presupuestoTotal || variacionCosto < 0) return "sobrecosto";
+  if (costoRealTotal === 0) return "sin_datos";
+  if (normalizedStatus === "ahorro") return "ahorro";
+  if (normalizedStatus === "dentro_presupuesto" || normalizedStatus === "en_ejecucion") {
+    return normalizedStatus;
+  }
+
+  return "en_ejecucion";
 }
 
 function getBudgetRecordText(record: Record<string, unknown> | null, keys: string[]): string | null {
@@ -1600,6 +1677,11 @@ function normalizeBudgetNumber(value: unknown): number | null {
   }
 
   return null;
+}
+
+function roundBudgetNumber(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.round(value * 100) / 100;
 }
 
 function formatBudgetPdfMoney(value: number): string {
