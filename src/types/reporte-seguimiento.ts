@@ -19,6 +19,13 @@ export interface ReporteSeguimiento {
   kpi_productividad_equipo?: number | null;
   kpi_cumplimiento_requerimientos?: number | null;
   kpi_eficiencia_flujo?: number | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  presupuesto?: any;
+  presupuesto_total?: number;
+  costo_real_total?: number;
+  variacion_costo?: number;
+  ejecucion_presupuestaria?: number;
+  estado_presupuesto?: string;
   html_reporte?: string | null;
   mensaje_html?: string | null;
   archivo_nombre?: string | null;

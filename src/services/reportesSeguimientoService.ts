@@ -79,6 +79,12 @@ function mapReporteSeguimiento(row: ReporteSeguimientoRow): ReporteSeguimiento {
     kpi_productividad_equipo: normalizeOptionalNumber(row.kpi_productividad_equipo),
     kpi_cumplimiento_requerimientos: normalizeOptionalNumber(row.kpi_cumplimiento_requerimientos),
     kpi_eficiencia_flujo: normalizeOptionalNumber(row.kpi_eficiencia_flujo),
+    presupuesto: normalizePresupuesto(row.presupuesto),
+    presupuesto_total: normalizeNumber(row.presupuesto_total),
+    costo_real_total: normalizeNumber(row.costo_real_total),
+    variacion_costo: normalizeNumber(row.variacion_costo),
+    ejecucion_presupuestaria: normalizeNumber(row.ejecucion_presupuestaria),
+    estado_presupuesto: normalizeEstadoPresupuesto(row.estado_presupuesto),
     html_reporte: row.html_reporte ?? null,
     mensaje_html: row.mensaje_html ?? null,
     archivo_nombre: row.archivo_nombre ?? null,
@@ -140,6 +146,20 @@ function normalizeKpis(value: unknown): ReporteSeguimiento["kpis"] {
   return null;
 }
 
+function normalizePresupuesto(value: unknown): ReporteSeguimiento["presupuesto"] {
+  if (value == null) return null;
+  if (typeof value === "object") return value;
+
+  return null;
+}
+
 function normalizeEstado(value: unknown): ReporteSeguimientoEstado {
   return value === "enviado" || value === "error" ? value : "generado";
+}
+
+function normalizeEstadoPresupuesto(value: unknown): string {
+  if (typeof value !== "string") return "sin_datos";
+
+  const text = value.trim();
+  return text ? text : "sin_datos";
 }

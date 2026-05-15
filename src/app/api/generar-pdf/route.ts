@@ -31,6 +31,12 @@ type ReportMetadata = {
   kpi_productividad_equipo?: number | string;
   kpi_cumplimiento_requerimientos?: number | string;
   kpi_eficiencia_flujo?: number | string;
+  presupuesto?: unknown;
+  presupuesto_total?: number | string;
+  costo_real_total?: number | string;
+  variacion_costo?: number | string;
+  ejecucion_presupuestaria?: number | string;
+  estado_presupuesto?: string;
   enviado_a?: string;
   destinatarios?: string;
   asunto?: string;
@@ -48,6 +54,12 @@ type GeneratePdfPayload = {
   kpi_productividad_equipo?: number | string;
   kpi_cumplimiento_requerimientos?: number | string;
   kpi_eficiencia_flujo?: number | string;
+  presupuesto?: unknown;
+  presupuesto_total?: number | string;
+  costo_real_total?: number | string;
+  variacion_costo?: number | string;
+  ejecucion_presupuestaria?: number | string;
+  estado_presupuesto?: string;
 };
 
 type InlineSegment = {
@@ -61,6 +73,7 @@ type ReportBlock =
   | { type: "list"; ordered: boolean; items: InlineSegment[][] }
   | { type: "table"; rows: InlineSegment[][][] }
   | { type: "kpi-section" }
+  | { type: "budget-section" }
   | { type: "divider" };
 
 type PdfKpiField =
@@ -77,6 +90,22 @@ type PdfKpiItem = {
   formula?: string;
   calculo?: string;
   interpretacion?: string;
+};
+
+type PdfBudgetInfo = {
+  presupuestoTotal: number;
+  costoRealTotal: number;
+  variacionCosto: number;
+  ejecucionPresupuestaria: number;
+  estadoPresupuesto: string;
+  interpretacion?: string;
+  detallePorFase: Array<{
+    fase: string;
+    costoEstimado: string;
+    costoReal: string;
+    variacion: string;
+    numeroTareas: string;
+  }>;
 };
 
 const KPI_DEFINITIONS: Array<{
@@ -255,6 +284,82 @@ const styles = StyleSheet.create({
     fontFamily: "Helvetica-Bold",
     color: "#334155",
   },
+  budgetSection: {
+    marginBottom: 24,
+    padding: 18,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#dbe3ef",
+    backgroundColor: "#f8fafc",
+  },
+  budgetSectionTitle: {
+    marginBottom: 6,
+    paddingBottom: 6,
+    borderBottomWidth: 2,
+    borderBottomColor: ACCENT_BLUE,
+    fontSize: 18,
+    fontFamily: "Helvetica-Bold",
+    color: PRIMARY_BLUE,
+  },
+  budgetSectionDescription: {
+    marginBottom: 14,
+    fontSize: 11,
+    lineHeight: 1.45,
+    color: "#475569",
+  },
+  budgetGrid: {
+    gap: 10,
+    marginBottom: 14,
+  },
+  budgetCard: {
+    width: "100%",
+    paddingTop: 12,
+    paddingRight: 14,
+    paddingBottom: 12,
+    paddingLeft: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#dbe3ef",
+    backgroundColor: "#ffffff",
+  },
+  budgetCardLabel: {
+    marginBottom: 5,
+    fontSize: 9.5,
+    fontFamily: "Helvetica-Bold",
+    color: "#475569",
+  },
+  budgetCardValue: {
+    fontSize: 16,
+    fontFamily: "Helvetica-Bold",
+    color: PRIMARY_BLUE,
+  },
+  budgetProgressTrack: {
+    height: 10,
+    marginTop: 4,
+    marginBottom: 8,
+    borderRadius: 999,
+    backgroundColor: "#e2e8f0",
+  },
+  budgetProgressFill: {
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: "#0284c7",
+  },
+  budgetProgressOverrun: {
+    backgroundColor: "#e11d48",
+  },
+  budgetInterpretation: {
+    marginTop: 8,
+    marginBottom: 12,
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#dbe3ef",
+    backgroundColor: "#ffffff",
+    fontSize: 10.5,
+    lineHeight: 1.45,
+    color: "#334155",
+  },
   bold: {
     fontFamily: "Helvetica-Bold",
   },
@@ -377,8 +482,12 @@ export async function POST(request: Request) {
     const filename = sanitizeFilename(payload.filename);
     const fechaRevision = resolveFechaRevision(metadata);
     const kpiItems = buildPdfKpiItems(metadata);
-    const blocks = ensureKpiMarker(parseHtmlToReportBlocks(html), kpiItems);
-    const pdfBuffer = await renderReportPdf(blocks, fechaRevision, kpiItems);
+    const budgetInfo = buildPdfBudgetInfo(metadata);
+    const blocks = ensureBudgetMarker(
+      ensureKpiMarker(parseHtmlToReportBlocks(html), kpiItems),
+      budgetInfo,
+    );
+    const pdfBuffer = await renderReportPdf(blocks, fechaRevision, kpiItems, budgetInfo);
 
     await persistGeneratedReport({
       title: REPORT_RECORD_TITLE,
@@ -588,9 +697,10 @@ async function renderReportPdf(
   blocks: ReportBlock[],
   fechaRevision: string,
   kpiItems: PdfKpiItem[],
+  budgetInfo: PdfBudgetInfo | null,
 ): Promise<ArrayBuffer> {
   const logoDataUri = await getLogoDataUri();
-  const document = ReportPdfDocument({ blocks, fechaRevision, logoDataUri, kpiItems });
+  const document = ReportPdfDocument({ blocks, fechaRevision, logoDataUri, kpiItems, budgetInfo });
 
   return pdf(document)
     .toBlob()
@@ -602,11 +712,13 @@ function ReportPdfDocument({
   fechaRevision,
   logoDataUri,
   kpiItems,
+  budgetInfo,
 }: {
   blocks: ReportBlock[];
   fechaRevision: string;
   logoDataUri: string | null;
   kpiItems: PdfKpiItem[];
+  budgetInfo: PdfBudgetInfo | null;
 }): ReactElement<React.ComponentProps<typeof Document>> {
   return React.createElement(
     Document,
@@ -650,7 +762,7 @@ function ReportPdfDocument({
           fechaRevision,
         ),
       ),
-      ...blocks.map((block, index) => renderBlock(block, index, kpiItems)),
+      ...blocks.map((block, index) => renderBlock(block, index, kpiItems, budgetInfo)),
       React.createElement(Text, {
         fixed: true,
         render: ({ pageNumber, totalPages }) =>
@@ -661,13 +773,26 @@ function ReportPdfDocument({
   );
 }
 
-function renderBlock(block: ReportBlock, index: number, kpiItems: PdfKpiItem[]): ReactElement {
+function renderBlock(
+  block: ReportBlock,
+  index: number,
+  kpiItems: PdfKpiItem[],
+  budgetInfo: PdfBudgetInfo | null,
+): ReactElement {
   if (block.type === "kpi-section") {
     if (kpiItems.length === 0) {
       return React.createElement(View, { key: `kpi-section-empty-${index}` });
     }
 
     return renderPdfKpiSection(kpiItems, index);
+  }
+
+  if (block.type === "budget-section") {
+    if (!budgetInfo) {
+      return React.createElement(View, { key: `budget-section-empty-${index}` });
+    }
+
+    return renderPdfBudgetSection(budgetInfo, index);
   }
 
   if (block.type === "heading") {
@@ -785,6 +910,97 @@ function renderPdfKpiDetailLines(item: PdfKpiItem): ReactElement[] {
     );
 }
 
+function renderPdfBudgetSection(budgetInfo: PdfBudgetInfo, index: number): ReactElement {
+  const progressWidth = `${Math.max(0, Math.min(budgetInfo.ejecucionPresupuestaria, 100))}%`;
+  const hasOverrun = budgetInfo.ejecucionPresupuestaria > 100;
+  const summaryItems = [
+    { label: "Presupuesto estimado", value: formatBudgetPdfMoney(budgetInfo.presupuestoTotal) },
+    { label: "Costo real", value: formatBudgetPdfMoney(budgetInfo.costoRealTotal) },
+    { label: "Variacion de costo", value: formatBudgetPdfMoney(budgetInfo.variacionCosto) },
+    {
+      label: "Ejecucion presupuestaria",
+      value: `${formatBudgetPdfPercent(budgetInfo.ejecucionPresupuestaria)}% ejecutado`,
+    },
+    { label: "Estado presupuestario", value: budgetInfo.estadoPresupuesto.replace(/_/g, " ") },
+  ];
+
+  return React.createElement(
+    View,
+    { key: `budget-section-${index}`, style: styles.budgetSection },
+    React.createElement(Text, { style: styles.budgetSectionTitle }, "Presupuesto"),
+    React.createElement(
+      Text,
+      { style: styles.budgetSectionDescription },
+      "Control presupuestario registrado en reportes_seguimiento para el proyecto SICOP.",
+    ),
+    React.createElement(
+      View,
+      { style: styles.budgetGrid },
+      ...summaryItems.map((item) =>
+        React.createElement(
+          View,
+          { key: item.label, style: styles.budgetCard, wrap: false },
+          React.createElement(Text, { style: styles.budgetCardLabel }, item.label),
+          React.createElement(Text, { style: styles.budgetCardValue }, item.value),
+        ),
+      ),
+    ),
+    React.createElement(
+      Text,
+      { style: styles.budgetCardLabel },
+      `Ejecucion presupuestaria: ${formatBudgetPdfPercent(budgetInfo.ejecucionPresupuestaria)}% ejecutado`,
+    ),
+    React.createElement(
+      View,
+      { style: styles.budgetProgressTrack },
+      React.createElement(View, {
+        style: [
+          styles.budgetProgressFill,
+          ...(hasOverrun ? [styles.budgetProgressOverrun] : []),
+          { width: progressWidth },
+        ],
+      }),
+    ),
+    hasOverrun
+      ? React.createElement(
+          Text,
+          { style: styles.kpiDetailLine },
+          "Ejecucion superior al 100%; el reporte registra sobrecosto.",
+        )
+      : null,
+    React.createElement(
+      Text,
+      { style: styles.budgetInterpretation },
+      budgetInfo.interpretacion ||
+        "No existe interpretacion presupuestaria disponible para este reporte.",
+    ),
+    budgetInfo.detallePorFase.length > 0
+      ? React.createElement(
+          View,
+          { style: styles.table },
+          React.createElement(
+            View,
+            { style: styles.tableRow, wrap: false },
+            ...["Fase", "Costo estimado", "Costo real", "Variacion", "Tareas"].map((header) =>
+              React.createElement(Text, { key: header, style: styles.tableHeaderCell }, header),
+            ),
+          ),
+          ...budgetInfo.detallePorFase.map((row, rowIndex) =>
+            React.createElement(
+              View,
+              { key: `${row.fase}-${rowIndex}`, style: styles.tableRow, wrap: false },
+              React.createElement(Text, { style: styles.tableCell }, row.fase),
+              React.createElement(Text, { style: styles.tableCell }, row.costoEstimado),
+              React.createElement(Text, { style: styles.tableCell }, row.costoReal),
+              React.createElement(Text, { style: styles.tableCell }, row.variacion),
+              React.createElement(Text, { style: styles.tableCell }, row.numeroTareas),
+            ),
+          ),
+        )
+      : null,
+  );
+}
+
 function renderInlineSegments(segments: InlineSegment[], keyPrefix: string): ReactElement[] {
   return segments.map((segment, index) => {
     if (segment.href) {
@@ -837,6 +1053,23 @@ function isKpiSectionTitle(value: string): boolean {
   );
 }
 
+function isBudgetSectionTitle(value: string): boolean {
+  const text = normalizeKpiKey(value);
+  return (
+    text.includes("presupuesto") ||
+    text.includes("control_presupuestario") ||
+    text.includes("ejecucion_presupuestaria")
+  );
+}
+
+function hasBudgetSection(blocks: ReportBlock[]): boolean {
+  return blocks.some((block) => {
+    if (block.type === "budget-section") return true;
+    if (block.type !== "heading") return false;
+    return isBudgetSectionTitle(block.segments.map((segment) => segment.text).join(" "));
+  });
+}
+
 function isStandaloneKpiSection(node: HTMLElement): boolean {
   const tagName = node.tagName.toLowerCase();
   if (tagName === "body" || tagName === "html") return false;
@@ -861,6 +1094,30 @@ function ensureKpiMarker(blocks: ReportBlock[], kpiItems: PdfKpiItem[]): ReportB
   return [
     ...blocks.slice(0, firstTableIndex + 1),
     { type: "kpi-section" },
+    ...blocks.slice(firstTableIndex + 1),
+  ];
+}
+
+function ensureBudgetMarker(blocks: ReportBlock[], budgetInfo: PdfBudgetInfo | null): ReportBlock[] {
+  if (!budgetInfo || hasBudgetSection(blocks)) {
+    return blocks;
+  }
+
+  const kpiIndex = blocks.findIndex((block) => block.type === "kpi-section");
+  if (kpiIndex >= 0) {
+    return [
+      ...blocks.slice(0, kpiIndex + 1),
+      { type: "budget-section" },
+      ...blocks.slice(kpiIndex + 1),
+    ];
+  }
+
+  const firstTableIndex = blocks.findIndex((block) => block.type === "table");
+  if (firstTableIndex < 0) return [{ type: "budget-section" }, ...blocks];
+
+  return [
+    ...blocks.slice(0, firstTableIndex + 1),
+    { type: "budget-section" },
     ...blocks.slice(firstTableIndex + 1),
   ];
 }
@@ -909,6 +1166,15 @@ function normalizePayloadMetadata(payload: GeneratePdfPayload): ReportMetadata |
     }
   }
 
+  if (payload.presupuesto !== undefined) metadata.presupuesto = payload.presupuesto;
+  if (payload.presupuesto_total !== undefined) metadata.presupuesto_total = payload.presupuesto_total;
+  if (payload.costo_real_total !== undefined) metadata.costo_real_total = payload.costo_real_total;
+  if (payload.variacion_costo !== undefined) metadata.variacion_costo = payload.variacion_costo;
+  if (payload.ejecucion_presupuestaria !== undefined) {
+    metadata.ejecucion_presupuestaria = payload.ejecucion_presupuestaria;
+  }
+  if (payload.estado_presupuesto !== undefined) metadata.estado_presupuesto = payload.estado_presupuesto;
+
   return Object.keys(metadata).length > 0 ? metadata : undefined;
 }
 
@@ -949,6 +1215,71 @@ function buildPdfKpiItems(metadata?: ReportMetadata): PdfKpiItem[] {
       },
     ];
   });
+}
+
+function buildPdfBudgetInfo(metadata?: ReportMetadata): PdfBudgetInfo | null {
+  if (!hasBudgetMetadata(metadata)) return null;
+
+  const presupuesto = getMetadataPresupuesto(metadata);
+  return {
+    presupuestoTotal: getBudgetMetadataNumber(metadata, "presupuesto_total"),
+    costoRealTotal: getBudgetMetadataNumber(metadata, "costo_real_total"),
+    variacionCosto: getBudgetMetadataNumber(metadata, "variacion_costo"),
+    ejecucionPresupuestaria: getBudgetMetadataNumber(metadata, "ejecucion_presupuestaria"),
+    estadoPresupuesto: getBudgetMetadataString(metadata, "estado_presupuesto") ?? "sin_datos",
+    ...(getBudgetRecordText(presupuesto, [
+      "interpretacion",
+      "interpretaci\u00f3n",
+      "interpretation",
+      "analisis",
+      "an\u00e1lisis",
+    ])
+      ? {
+          interpretacion: getBudgetRecordText(presupuesto, [
+            "interpretacion",
+            "interpretaci\u00f3n",
+            "interpretation",
+            "analisis",
+            "an\u00e1lisis",
+          ])!,
+        }
+      : {}),
+    detallePorFase: buildPdfBudgetPhaseRows(presupuesto?.detalle_por_fase),
+  };
+}
+
+function hasBudgetMetadata(metadata?: ReportMetadata): boolean {
+  if (!metadata) return false;
+
+  return [
+    "presupuesto",
+    "presupuesto_total",
+    "costo_real_total",
+    "variacion_costo",
+    "ejecucion_presupuestaria",
+    "estado_presupuesto",
+  ].some((key) => metadata[key] !== undefined && metadata[key] !== null);
+}
+
+function buildPdfBudgetPhaseRows(value: unknown): PdfBudgetInfo["detallePorFase"] {
+  return toBudgetRecords(value).map((row) => ({
+    fase: getBudgetRecordDisplay(row, ["fase", "nombre", "nombre_fase"], "Sin fase"),
+    costoEstimado: getBudgetRecordMoney(row, [
+      "costo_estimado",
+      "presupuesto_estimado",
+      "costo_planificado",
+      "estimado",
+    ]),
+    costoReal: getBudgetRecordMoney(row, ["costo_real", "real", "costo_real_total"]),
+    variacion: getBudgetRecordMoney(row, ["variacion", "variacion_costo", "desviacion"]),
+    numeroTareas: getBudgetRecordDisplay(row, [
+      "numero_tareas",
+      "num_tareas",
+      "tareas",
+      "cantidad_tareas",
+      "total_tareas",
+    ], "0"),
+  }));
 }
 
 function findKpiSource(kpis: unknown, aliases: string[]): Record<string, unknown> | null {
@@ -1111,6 +1442,12 @@ async function persistGeneratedReport({
       kpi_productividad_equipo: getMetadataOptionalNumber(metadata, "kpi_productividad_equipo"),
       kpi_cumplimiento_requerimientos: getMetadataOptionalNumber(metadata, "kpi_cumplimiento_requerimientos"),
       kpi_eficiencia_flujo: getMetadataOptionalNumber(metadata, "kpi_eficiencia_flujo"),
+      presupuesto: getMetadataPresupuesto(metadata),
+      presupuesto_total: getBudgetMetadataNumber(metadata, "presupuesto_total"),
+      costo_real_total: getBudgetMetadataNumber(metadata, "costo_real_total"),
+      variacion_costo: getBudgetMetadataNumber(metadata, "variacion_costo"),
+      ejecucion_presupuestaria: getBudgetMetadataNumber(metadata, "ejecucion_presupuestaria"),
+      estado_presupuesto: getBudgetMetadataString(metadata, "estado_presupuesto") ?? "sin_datos",
       html_reporte: html,
       mensaje_html: html,
       archivo_nombre: filename,
@@ -1173,6 +1510,118 @@ function getMetadataString(metadata: ReportMetadata | undefined, key: keyof Repo
 
 function getMetadataKpis(metadata: ReportMetadata | undefined): unknown {
   return metadata?.kpis ?? null;
+}
+
+function getMetadataPresupuesto(metadata: ReportMetadata | undefined): Record<string, unknown> | null {
+  const value = metadata?.presupuesto;
+  return value != null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function getBudgetMetadataNumber(metadata: ReportMetadata | undefined, key: keyof ReportMetadata): number {
+  const directValue = metadata?.[key];
+  const directNumber = normalizeBudgetNumber(directValue);
+  if (directNumber !== null) return directNumber;
+
+  const presupuesto = getMetadataPresupuesto(metadata);
+  const nestedNumber = normalizeBudgetNumber(presupuesto?.[key as string]);
+  if (nestedNumber !== null) return nestedNumber;
+
+  return 0;
+}
+
+function getBudgetMetadataString(metadata: ReportMetadata | undefined, key: keyof ReportMetadata): string | null {
+  const directValue = metadata?.[key];
+  if (typeof directValue === "string" && directValue.trim()) return directValue.trim();
+
+  const presupuesto = getMetadataPresupuesto(metadata);
+  const nestedValue = presupuesto?.[key as string];
+  if (typeof nestedValue === "string" && nestedValue.trim()) return nestedValue.trim();
+
+  return null;
+}
+
+function getBudgetRecordText(record: Record<string, unknown> | null, keys: string[]): string | null {
+  if (!record) return null;
+
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+
+  return null;
+}
+
+function getBudgetRecordDisplay(record: Record<string, unknown>, keys: string[], fallback: string): string {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return formatBudgetPdfPlainNumber(value);
+  }
+
+  return fallback;
+}
+
+function getBudgetRecordMoney(record: Record<string, unknown>, keys: string[]): string {
+  for (const key of keys) {
+    const value = record[key];
+    const numericValue = normalizeBudgetNumber(value);
+    if (numericValue !== null) return formatBudgetPdfMoney(numericValue);
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+
+  return formatBudgetPdfMoney(0);
+}
+
+function toBudgetRecords(value: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(value)) {
+    return value.filter(
+      (item): item is Record<string, unknown> =>
+        item != null && typeof item === "object" && !Array.isArray(item),
+    );
+  }
+
+  if (value != null && typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>).flatMap(([key, item]) => {
+      if (item == null || typeof item !== "object" || Array.isArray(item)) return [];
+      return [{ fase: key, ...(item as Record<string, unknown>) }];
+    });
+  }
+
+  return [];
+}
+
+function normalizeBudgetNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const numericValue = Number(value.replace(",", "."));
+    if (Number.isFinite(numericValue)) return numericValue;
+  }
+
+  return null;
+}
+
+function formatBudgetPdfMoney(value: number): string {
+  return new Intl.NumberFormat("es-EC", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number.isFinite(value) ? value : 0);
+}
+
+function formatBudgetPdfPercent(value: number): string {
+  return new Intl.NumberFormat("es-EC", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(Number.isFinite(value) ? value : 0);
+}
+
+function formatBudgetPdfPlainNumber(value: number): string {
+  return new Intl.NumberFormat("es-EC", {
+    maximumFractionDigits: Number.isInteger(value) ? 0 : 2,
+  }).format(value);
 }
 
 function formatErrorMessage(prefix: string, error: unknown): string {

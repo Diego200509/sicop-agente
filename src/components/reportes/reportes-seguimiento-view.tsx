@@ -19,6 +19,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 
 import { AppPageShell } from "@/src/components/layout/app-page-shell";
+import { BudgetSection } from "@/src/components/reportes/budget-section";
 import { Badge } from "@/src/components/ui/badge";
 import { Button } from "@/src/components/ui/button";
 import { Card } from "@/src/components/ui/card";
@@ -471,6 +472,8 @@ function ReporteDetalleModal({
             />
           ))}
         </div>
+
+        <BudgetSection reporte={reporte} />
 
         <div className="flex flex-col gap-3 border-b border-zinc-200 p-4 dark:border-zinc-800 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex rounded-md border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-800 dark:bg-zinc-900">
