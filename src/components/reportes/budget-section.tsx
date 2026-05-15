@@ -24,6 +24,14 @@ type BudgetStatus =
   | string;
 type BudgetRecord = Record<string, unknown>;
 
+const PHASE_DISPLAY_ORDER = [
+  "planificacion",
+  "analisis de requerimientos",
+  "diseno",
+  "desarrollo",
+  "seguimiento y control",
+];
+
 const budgetNumberFormat = new Intl.NumberFormat("es-EC", {
   style: "currency",
   currency: "USD",
@@ -38,7 +46,7 @@ const percentNumberFormat = new Intl.NumberFormat("es-EC", {
 
 export function BudgetSection({ reporte }: { reporte: ReporteSeguimiento }) {
   const presupuesto = asRecord(reporte.presupuesto);
-  const phaseRows = toRecords(presupuesto?.detalle_por_fase);
+  const phaseRows = sortPhaseRows(toRecords(presupuesto?.detalle_por_fase));
   const taskRows = toRecords(presupuesto?.detalle_por_tarea);
   const interpretation = getTextValue(presupuesto, [
     "interpretacion",
@@ -310,6 +318,32 @@ function toRecords(value: unknown): BudgetRecord[] {
   }
 
   return [];
+}
+
+function sortPhaseRows(rows: BudgetRecord[]): BudgetRecord[] {
+  return [...rows].sort((left, right) => {
+    const leftIndex = getPhaseOrderIndex(left);
+    const rightIndex = getPhaseOrderIndex(right);
+
+    if (leftIndex !== rightIndex) return leftIndex - rightIndex;
+    return 0;
+  });
+}
+
+function getPhaseOrderIndex(row: BudgetRecord): number {
+  const phaseName = getDisplayValue(row, ["fase", "nombre", "nombre_fase"], "");
+  const normalizedPhaseName = normalizePhaseName(phaseName);
+  const index = PHASE_DISPLAY_ORDER.indexOf(normalizedPhaseName);
+
+  return index >= 0 ? index : PHASE_DISPLAY_ORDER.length;
+}
+
+function normalizePhaseName(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
 }
 
 function getTextValue(record: BudgetRecord | null, keys: string[]): string | null {
