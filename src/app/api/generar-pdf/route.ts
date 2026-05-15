@@ -220,17 +220,14 @@ const styles = StyleSheet.create({
     color: "#475569",
   },
   kpiGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
+    gap: 12,
   },
   kpiCard: {
-    width: "48%",
-    minHeight: 78,
-    paddingTop: 12,
-    paddingRight: 14,
-    paddingBottom: 12,
-    paddingLeft: 14,
+    width: "100%",
+    paddingTop: 14,
+    paddingRight: 16,
+    paddingBottom: 14,
+    paddingLeft: 16,
     borderRadius: 9,
     borderWidth: 1,
     borderColor: "#dbe3ef",
@@ -243,16 +240,20 @@ const styles = StyleSheet.create({
     color: PRIMARY_BLUE,
   },
   kpiValue: {
-    marginBottom: 6,
+    marginBottom: 10,
     fontSize: 24,
     fontFamily: "Helvetica-Bold",
     color: "#0284c7",
   },
   kpiDetailLine: {
-    marginTop: 3,
-    fontSize: 8.5,
+    marginTop: 5,
+    fontSize: 9.5,
     lineHeight: 1.45,
     color: "#475569",
+  },
+  kpiDetailLabel: {
+    fontFamily: "Helvetica-Bold",
+    color: "#334155",
   },
   bold: {
     fontFamily: "Helvetica-Bold",
@@ -755,7 +756,7 @@ function renderPdfKpiSection(kpiItems: PdfKpiItem[], index: number): ReactElemen
       ...kpiItems.map((item) =>
         React.createElement(
           View,
-          { key: item.field, style: styles.kpiCard },
+          { key: item.field, style: styles.kpiCard, wrap: false },
           React.createElement(Text, { style: styles.kpiName }, item.nombre),
           React.createElement(Text, { style: styles.kpiValue }, item.valor),
           ...renderPdfKpiDetailLines(item),
@@ -773,12 +774,12 @@ function renderPdfKpiDetailLines(item: PdfKpiItem): ReactElement[] {
   ];
 
   return rows
-    .filter(() => false)
+    .filter((row) => row.text?.trim())
     .map((row, index) =>
       React.createElement(
         Text,
         { key: `${item.field}-detail-${index}`, style: styles.kpiDetailLine },
-        React.createElement(Text, { style: styles.bold }, row.label),
+        React.createElement(Text, { style: styles.kpiDetailLabel }, row.label),
         row.text!.trim(),
       ),
     );
