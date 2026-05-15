@@ -60,6 +60,7 @@ type ReportBlock =
   | { type: "paragraph"; segments: InlineSegment[] }
   | { type: "list"; ordered: boolean; items: InlineSegment[][] }
   | { type: "table"; rows: InlineSegment[][][] }
+  | { type: "kpi-section" }
   | { type: "divider" };
 
 type PdfKpiField =
@@ -374,8 +375,8 @@ export async function POST(request: Request) {
     const metadata = normalizePayloadMetadata(payload);
     const filename = sanitizeFilename(payload.filename);
     const fechaRevision = resolveFechaRevision(metadata);
-    const blocks = parseHtmlToReportBlocks(html);
     const kpiItems = buildPdfKpiItems(metadata);
+    const blocks = ensureKpiMarker(parseHtmlToReportBlocks(html), kpiItems);
     const pdfBuffer = await renderReportPdf(blocks, fechaRevision, kpiItems);
 
     await persistGeneratedReport({
@@ -412,7 +413,6 @@ function parseHtmlToReportBlocks(html: string): ReportBlock[] {
   container
     .querySelectorAll("script, style, noscript, .pdf-header, .fecha-box, .footer")
     .forEach((node) => node.remove());
-  removeIncomingKpiSections(container);
 
   const blocks: ReportBlock[] = [];
   container.childNodes.forEach((node) => appendNodeBlocks(node, blocks));
@@ -423,25 +423,6 @@ function parseHtmlToReportBlocks(html: string): ReportBlock[] {
   }
 
   return blocks;
-}
-
-function removeIncomingKpiSections(container: HTMLElement) {
-  container.querySelectorAll("h1, h2, h3").forEach((heading) => {
-    if (!isKpiSectionTitle(heading.text)) return;
-
-    const parent = heading.parentNode;
-    if (
-      parent instanceof HTMLElement &&
-      parent !== container &&
-      !["body", "html"].includes(parent.tagName.toLowerCase()) &&
-      parent.querySelectorAll("h1, h2, h3").length === 1
-    ) {
-      parent.remove();
-      return;
-    }
-
-    heading.remove();
-  });
 }
 
 function appendNodeBlocks(node: HtmlNode, blocks: ReportBlock[]) {
@@ -455,8 +436,17 @@ function appendNodeBlocks(node: HtmlNode, blocks: ReportBlock[]) {
 
   const tagName = node.tagName.toLowerCase();
 
+  if (isStandaloneKpiSection(node)) {
+    pushKpiMarker(blocks);
+    return;
+  }
+
   if (tagName === "h1" || tagName === "h2" || tagName === "h3") {
     if (tagName === "h1" && isDuplicatedBackendHeader(node.text)) return;
+    if (isKpiSectionTitle(node.text)) {
+      pushKpiMarker(blocks);
+      return;
+    }
 
     const segments = extractInlineSegments(node);
     if (segments.length > 0) {
@@ -659,8 +649,7 @@ function ReportPdfDocument({
           fechaRevision,
         ),
       ),
-      ...(kpiItems.length > 0 ? [renderPdfKpiSection(kpiItems)] : []),
-      ...blocks.map(renderBlock),
+      ...blocks.map((block, index) => renderBlock(block, index, kpiItems)),
       React.createElement(Text, {
         fixed: true,
         render: ({ pageNumber, totalPages }) =>
@@ -671,7 +660,15 @@ function ReportPdfDocument({
   );
 }
 
-function renderBlock(block: ReportBlock, index: number): ReactElement {
+function renderBlock(block: ReportBlock, index: number, kpiItems: PdfKpiItem[]): ReactElement {
+  if (block.type === "kpi-section") {
+    if (kpiItems.length === 0) {
+      return React.createElement(View, { key: `kpi-section-empty-${index}` });
+    }
+
+    return renderPdfKpiSection(kpiItems, index);
+  }
+
   if (block.type === "heading") {
     const style = block.level === 1 ? styles.h1 : block.level === 2 ? styles.h2 : styles.h3;
     return React.createElement(
@@ -738,10 +735,10 @@ function renderBlock(block: ReportBlock, index: number): ReactElement {
   return React.createElement(View, { key: `divider-${index}`, style: styles.divider });
 }
 
-function renderPdfKpiSection(kpiItems: PdfKpiItem[]): ReactElement {
+function renderPdfKpiSection(kpiItems: PdfKpiItem[], index: number): ReactElement {
   return React.createElement(
     View,
-    { key: "kpi-section", style: styles.kpiSection },
+    { key: `kpi-section-${index}`, style: styles.kpiSection },
     React.createElement(
       Text,
       { style: styles.kpiSectionTitle },
@@ -776,7 +773,7 @@ function renderPdfKpiDetailLines(item: PdfKpiItem): ReactElement[] {
   ];
 
   return rows
-    .filter((row) => row.text?.trim())
+    .filter(() => false)
     .map((row, index) =>
       React.createElement(
         Text,
@@ -837,6 +834,34 @@ function isKpiSectionTitle(value: string): boolean {
     text.includes("kpi") ||
     text.includes("desempeno_kpi")
   );
+}
+
+function isStandaloneKpiSection(node: HTMLElement): boolean {
+  const tagName = node.tagName.toLowerCase();
+  if (tagName === "body" || tagName === "html") return false;
+
+  const headings = node.querySelectorAll("h1, h2, h3");
+  return headings.length === 1 && isKpiSectionTitle(headings[0]?.text ?? "");
+}
+
+function pushKpiMarker(blocks: ReportBlock[]) {
+  if (blocks.some((block) => block.type === "kpi-section")) return;
+  blocks.push({ type: "kpi-section" });
+}
+
+function ensureKpiMarker(blocks: ReportBlock[], kpiItems: PdfKpiItem[]): ReportBlock[] {
+  if (kpiItems.length === 0 || blocks.some((block) => block.type === "kpi-section")) {
+    return blocks;
+  }
+
+  const firstTableIndex = blocks.findIndex((block) => block.type === "table");
+  if (firstTableIndex < 0) return [{ type: "kpi-section" }, ...blocks];
+
+  return [
+    ...blocks.slice(0, firstTableIndex + 1),
+    { type: "kpi-section" },
+    ...blocks.slice(firstTableIndex + 1),
+  ];
 }
 
 function isDateReviewLine(value: string): boolean {
