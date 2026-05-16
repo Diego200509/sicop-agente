@@ -20,12 +20,12 @@ import {
 import { useEffect, useMemo, useState } from "react";
 
 import { AppPageShell } from "@/src/components/layout/app-page-shell";
-import { BudgetSection } from "@/src/components/reportes/budget-section";
 import { Badge } from "@/src/components/ui/badge";
 import { Button } from "@/src/components/ui/button";
 import { Card } from "@/src/components/ui/card";
 import { EmptyState } from "@/src/components/ui/empty-state";
 import { Input } from "@/src/components/ui/input";
+import { BudgetExecutiveSummary } from "@/src/features/budget/components/budget-executive-summary";
 import {
   Table,
   TableBody,
@@ -552,7 +552,7 @@ function ReporteDetalleModal({
           <InfoItem label="Archivo" value={reporte.archivo_nombre || "Sin archivo registrado"} />
         </div>
 
-        <div className="grid gap-2 border-b border-zinc-200 p-4 dark:border-zinc-800 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-2 border-b border-zinc-200 p-4 dark:border-zinc-800 sm:grid-cols-4">
           {(Object.keys(metricLabels) as Array<keyof typeof metricLabels>).map((key) => (
             <SecondaryMetric
               key={key}
@@ -562,7 +562,7 @@ function ReporteDetalleModal({
           ))}
         </div>
 
-        <BudgetSection reporte={reporte} />
+        <BudgetExecutiveSummary reporte={reporte} showDetailLink />
 
         <div className="flex flex-col gap-3 border-b border-zinc-200 p-4 dark:border-zinc-800 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex rounded-md border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-800 dark:bg-zinc-900">

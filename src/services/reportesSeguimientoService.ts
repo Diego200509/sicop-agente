@@ -44,6 +44,30 @@ export async function getReportesSeguimiento(): Promise<ReporteSeguimiento[]> {
   return (data ?? []).map(mapReporteSeguimiento);
 }
 
+export async function getBudgetReports(): Promise<ReporteSeguimiento[]> {
+  return getReportesSeguimiento();
+}
+
+export async function getLatestBudgetReport(): Promise<ReporteSeguimiento | null> {
+  const supabase = getBackendSupabaseClient();
+  const { data, error } = await supabase
+    .from("reportes_seguimiento")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`No se pudo obtener el ultimo reporte presupuestario: ${error.message}`);
+  }
+
+  return data ? mapReporteSeguimiento(data as ReporteSeguimientoRow) : null;
+}
+
+export async function getReportById(id: string): Promise<ReporteSeguimiento | null> {
+  return getReporteSeguimientoById(id);
+}
+
 export async function getReporteSeguimientoById(id: string): Promise<ReporteSeguimiento | null> {
   const supabase = getBackendSupabaseClient();
   const { data, error } = await supabase

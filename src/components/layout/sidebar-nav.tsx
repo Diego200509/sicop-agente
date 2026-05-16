@@ -1,6 +1,6 @@
 "use client";
 
-import { ClipboardList, FileText, LayoutDashboard, MessageSquare } from "lucide-react";
+import { CircleDollarSign, ClipboardList, FileText, LayoutDashboard, MessageSquare } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { MotionLink } from "@/src/components/ui/motion-press";
 import { cn } from "@/src/lib/utils";
@@ -17,6 +17,7 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard },
   { href: "/tareas", label: "Tareas", Icon: ClipboardList },
   { href: "/reportes-seguimiento", label: "Reportes IA", Icon: FileText },
+  { href: "/presupuesto", label: "Presupuesto", Icon: CircleDollarSign },
   { href: "/chat", label: "Chat", Icon: MessageSquare },
 ] as const;
 
