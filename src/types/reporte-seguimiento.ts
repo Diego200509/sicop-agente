@@ -9,6 +9,7 @@ export interface ReporteSeguimiento {
   fecha_revision: string;
   total_tareas: number;
   tareas_completadas: number;
+  tareas_en_curso?: number;
   tareas_proximas: number;
   tareas_atrasadas: number;
   tareas_sin_fecha: number;

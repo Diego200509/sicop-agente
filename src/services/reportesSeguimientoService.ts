@@ -69,6 +69,7 @@ function mapReporteSeguimiento(row: ReporteSeguimientoRow): ReporteSeguimiento {
     fecha_revision: metadataFechaRevision ?? row.fecha_revision ?? row.created_at,
     total_tareas: normalizeNumber(row.total_tareas),
     tareas_completadas: normalizeNumber(row.tareas_completadas),
+    tareas_en_curso: normalizeNumber(row.tareas_en_curso),
     tareas_proximas: normalizeNumber(row.tareas_proximas),
     tareas_atrasadas: normalizeNumber(row.tareas_atrasadas),
     tareas_sin_fecha: normalizeNumber(row.tareas_sin_fecha),

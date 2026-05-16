@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Activity,
   AlertTriangle,
   CalendarClock,
   CheckCircle2,
@@ -53,6 +54,7 @@ const estadoOptions = [
 const metricLabels = {
   total_tareas: "Total tareas",
   tareas_completadas: "Completadas",
+  tareas_en_curso: "En curso",
   tareas_en_plazo: "En plazo",
   tareas_proximas: "Próximas",
   tareas_atrasadas: "Atrasadas",
@@ -95,7 +97,7 @@ export function ReportesSeguimientoView({
       description="Historial de reportes automáticos generados por el agente SICOP."
       className="gap-6"
     >
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <SummaryCard label="Total de reportes" value={resumen.totalReportes} icon={FileText} tone="zinc" />
         <SummaryCard
           label="Último reporte generado"
@@ -106,6 +108,7 @@ export function ReportesSeguimientoView({
         />
         <SummaryCard label="Total de tareas analizadas" value={resumen.totalTareas} icon={ListChecks} tone="sky" />
         <SummaryCard label="Tareas completadas" value={resumen.tareasCompletadas} icon={CheckCircle2} tone="emerald" />
+        <SummaryCard label="Tareas en curso" value={resumen.tareasEnCurso} icon={Activity} tone="sky" />
         <SummaryCard label="Tareas en plazo" value={resumen.tareasEnPlazo} icon={Clock3} tone="blue" />
         <SummaryCard label="Tareas próximas" value={resumen.tareasProximas} icon={CalendarClock} tone="sky" />
         <SummaryCard label="Tareas atrasadas" value={resumen.tareasAtrasadas} icon={AlertTriangle} tone="rose" />
@@ -186,6 +189,7 @@ export function ReportesSeguimientoView({
                   <TableHead>Título</TableHead>
                   <TableHead className="text-right">Total tareas</TableHead>
                   <TableHead className="text-right">Completadas</TableHead>
+                  <TableHead className="text-right">En curso</TableHead>
                   <TableHead className="text-right">En plazo</TableHead>
                   <TableHead className="text-right">Próximas</TableHead>
                   <TableHead className="text-right">Atrasadas</TableHead>
@@ -211,6 +215,7 @@ export function ReportesSeguimientoView({
                     </TableCell>
                     <MetricCell value={TOTAL_TAREAS_ANALIZADAS} />
                     <MetricCell value={reporte.tareas_completadas} />
+                    <MetricCell value={reporte.tareas_en_curso ?? 0} />
                     <MetricCell value={reporte.tareas_en_plazo} />
                     <MetricCell value={reporte.tareas_proximas} />
                     <MetricCell value={reporte.tareas_atrasadas} />
@@ -468,7 +473,7 @@ function ReporteDetalleModal({
             <SecondaryMetric
               key={key}
               label={metricLabels[key]}
-              value={key === "total_tareas" ? TOTAL_TAREAS_ANALIZADAS : reporte[key]}
+              value={key === "total_tareas" ? TOTAL_TAREAS_ANALIZADAS : (reporte[key] ?? 0)}
             />
           ))}
         </div>

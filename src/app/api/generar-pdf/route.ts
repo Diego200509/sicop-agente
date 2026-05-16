@@ -21,6 +21,7 @@ export const dynamic = "force-dynamic";
 type ReportMetadata = {
   total_tareas?: number;
   tareas_completadas?: number;
+  tareas_en_curso?: number;
   tareas_proximas?: number;
   tareas_atrasadas?: number;
   tareas_sin_fecha?: number;
@@ -48,6 +49,7 @@ type GeneratePdfPayload = {
   html?: string;
   filename?: string;
   metadata?: ReportMetadata;
+  tareas_en_curso?: number | string;
   kpis?: unknown;
   kpi_cumplimiento_cronograma?: number | string;
   kpi_tasa_defectos?: number | string;
@@ -1162,6 +1164,7 @@ function normalizePayloadMetadata(payload: GeneratePdfPayload): ReportMetadata |
   ];
 
   if (payload.kpis !== undefined) metadata.kpis = payload.kpis;
+  if (payload.tareas_en_curso !== undefined) metadata.tareas_en_curso = Number(payload.tareas_en_curso);
 
   for (const key of topLevelKpiKeys) {
     if (payload[key] !== undefined) {
@@ -1462,6 +1465,7 @@ async function persistGeneratedReport({
       fecha_revision: toSupabaseRevisionDate(fechaRevision),
       total_tareas: getMetadataNumber(metadata, "total_tareas", TOTAL_TAREAS_ANALIZADAS),
       tareas_completadas: getMetadataNumber(metadata, "tareas_completadas"),
+      tareas_en_curso: getMetadataNumber(metadata, "tareas_en_curso"),
       tareas_proximas: getMetadataNumber(metadata, "tareas_proximas"),
       tareas_atrasadas: getMetadataNumber(metadata, "tareas_atrasadas"),
       tareas_sin_fecha: getMetadataNumber(metadata, "tareas_sin_fecha"),

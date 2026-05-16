@@ -14,6 +14,7 @@ type ReportesResumen = {
   ultimoReporte: ReporteSeguimiento | null;
   totalTareas: number;
   tareasCompletadas: number;
+  tareasEnCurso: number;
   tareasEnPlazo: number;
   tareasProximas: number;
   tareasAtrasadas: number;
@@ -117,6 +118,7 @@ export function useReportesSeguimiento({
       ultimoReporte,
       totalTareas: ultimoReporte ? TOTAL_TAREAS_ANALIZADAS : 0,
       tareasCompletadas: ultimoReporte?.tareas_completadas ?? 0,
+      tareasEnCurso: ultimoReporte?.tareas_en_curso ?? 0,
       tareasEnPlazo: ultimoReporte?.tareas_en_plazo ?? 0,
       tareasProximas: ultimoReporte?.tareas_proximas ?? 0,
       tareasAtrasadas: ultimoReporte?.tareas_atrasadas ?? 0,
