@@ -16,8 +16,11 @@ export function MetricCard({ label, value, icon: Icon, tone = "zinc" }: MetricCa
     <div className="rounded-md border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/30">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{label}</p>
-          <p className="mt-1 truncate text-lg font-bold tabular-nums text-zinc-950 dark:text-zinc-50" title={String(value)}>
+          <p className="text-xs font-medium leading-snug text-zinc-500 dark:text-zinc-400">{label}</p>
+          <p
+            className="mt-1 break-words text-lg font-bold tabular-nums text-zinc-950 dark:text-zinc-50"
+            title={String(value)}
+          >
             {value}
           </p>
         </div>
