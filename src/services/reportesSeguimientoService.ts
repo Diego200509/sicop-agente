@@ -75,7 +75,7 @@ function mapReporteSeguimiento(row: ReporteSeguimientoRow): ReporteSeguimiento {
     tareas_sin_fecha: normalizeNumber(row.tareas_sin_fecha),
     tareas_en_plazo: normalizeNumber(row.tareas_en_plazo),
     kpis: normalizeKpis(row.kpis),
-    resumen_kpis: row.resumen_kpis ?? null,
+    resumen_kpis: normalizeResumenKpis(row.resumen_kpis),
     kpi_cumplimiento_cronograma: normalizeOptionalNumber(row.kpi_cumplimiento_cronograma),
     kpi_tasa_defectos: normalizeOptionalNumber(row.kpi_tasa_defectos),
     kpi_productividad_equipo: normalizeOptionalNumber(row.kpi_productividad_equipo),
@@ -124,6 +124,11 @@ export async function getLatestSeguimientoReport(): Promise<ReporteSeguimiento |
         "tareas_en_plazo",
         "kpis",
         "resumen_kpis",
+        "kpi_cumplimiento_cronograma",
+        "kpi_tasa_defectos",
+        "kpi_productividad_equipo",
+        "kpi_cumplimiento_requerimientos",
+        "kpi_eficiencia_flujo",
         "presupuesto",
         "presupuesto_total",
         "costo_real_total",
@@ -193,6 +198,23 @@ function normalizeKpis(value: unknown): ReporteSeguimiento["kpis"] {
   if (typeof value === "object") return value as Record<string, unknown>;
 
   return null;
+}
+
+function normalizeResumenKpis(value: unknown): ReporteSeguimiento["resumen_kpis"] {
+  if (value == null) return {};
+  if (typeof value === "object" && !Array.isArray(value)) return value as Record<string, unknown>;
+  if (typeof value === "string" && value.trim()) {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      if (parsed != null && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      return { texto: value };
+    }
+  }
+
+  return {};
 }
 
 function normalizePresupuesto(value: unknown): ReporteSeguimiento["presupuesto"] {

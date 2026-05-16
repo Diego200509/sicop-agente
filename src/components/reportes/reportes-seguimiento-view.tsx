@@ -410,6 +410,90 @@ function SecondaryMetric({ label, value }: { label: string; value: number }) {
   );
 }
 
+export function KpiReportSection({ reporte }: { reporte: ReporteSeguimiento }) {
+  const individualKpis = [
+    { label: "Cumplimiento cronograma", value: reporte.kpi_cumplimiento_cronograma },
+    { label: "Tasa de defectos", value: reporte.kpi_tasa_defectos },
+    { label: "Productividad equipo", value: reporte.kpi_productividad_equipo },
+    { label: "Cumplimiento requerimientos", value: reporte.kpi_cumplimiento_requerimientos },
+    { label: "Eficiencia flujo", value: reporte.kpi_eficiencia_flujo },
+  ].filter((item): item is { label: string; value: number } => typeof item.value === "number" && Number.isFinite(item.value));
+  const hasResumen = hasJsonContent(reporte.resumen_kpis);
+  const hasKpis = hasJsonContent(reporte.kpis);
+
+  if (individualKpis.length === 0 && !hasResumen && !hasKpis) {
+    return (
+      <div className="border-b border-zinc-200 p-4 dark:border-zinc-800">
+        <div className="rounded-md border border-dashed border-zinc-200 px-4 py-5 text-sm text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+          Este reporte no contiene resumen_kpis ni KPIs registrados.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3 border-b border-zinc-200 p-4 dark:border-zinc-800">
+      <div>
+        <h3 className="text-base font-semibold text-zinc-950 dark:text-zinc-50">
+          Indicadores Clave de Desempeño (KPI)
+        </h3>
+        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+          Datos registrados en el último reporte automático.
+        </p>
+      </div>
+
+      {individualKpis.length > 0 ? (
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+          {individualKpis.map((item) => (
+            <div key={item.label} className="rounded-md border border-zinc-200 px-3 py-3 dark:border-zinc-800">
+              <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{item.label}</p>
+              <p className="mt-1 text-xl font-bold tabular-nums text-zinc-950 dark:text-zinc-50">
+                {formatPercent(item.value)}
+              </p>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        <JsonSummaryBlock
+          title="Resumen KPIs"
+          value={reporte.resumen_kpis}
+          emptyText="El reporte no contiene resumen_kpis detallado. Se usan los KPIs principales como respaldo."
+        />
+        <JsonSummaryBlock
+          title="KPIs registrados"
+          value={reporte.kpis}
+          emptyText="No hay objeto kpis registrado para este reporte."
+        />
+      </div>
+    </div>
+  );
+}
+
+function JsonSummaryBlock({
+  title,
+  value,
+  emptyText,
+}: {
+  title: string;
+  value: unknown;
+  emptyText: string;
+}) {
+  return (
+    <div className="rounded-md border border-zinc-200 bg-zinc-50/70 p-3 dark:border-zinc-800 dark:bg-zinc-900/50">
+      <p className="text-xs font-semibold uppercase text-zinc-500 dark:text-zinc-400">{title}</p>
+      {hasJsonContent(value) ? (
+        <pre className="mt-2 max-h-44 overflow-auto whitespace-pre-wrap text-xs leading-relaxed text-zinc-700 dark:text-zinc-300">
+          {formatJson(value)}
+        </pre>
+      ) : (
+        <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">{emptyText}</p>
+      )}
+    </div>
+  );
+}
+
 function ReporteDetalleModal({
   reporte,
   activeTab,
@@ -661,6 +745,31 @@ function parseDate(value: string): Date | null {
 
   const date = new Date(trimmedValue);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function hasJsonContent(value: unknown): boolean {
+  if (value == null) return false;
+  if (typeof value === "string") return value.trim().length > 0 && value.trim() !== "{}";
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === "object") return Object.keys(value).length > 0;
+  return true;
+}
+
+function formatJson(value: unknown): string {
+  if (typeof value === "string") return value;
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return "No disponible";
+  }
+}
+
+function formatPercent(value: number): string {
+  const percentValue = Math.abs(value) <= 1 ? value * 100 : value;
+  return `${new Intl.NumberFormat("es-EC", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: Number.isInteger(percentValue) ? 0 : 1,
+  }).format(percentValue)}%`;
 }
 
 function hasTime(value: string): boolean {

@@ -1,6 +1,7 @@
 export type ReporteSeguimientoEstado = "generado" | "enviado" | "error";
 
 export type ReporteSeguimientoKpis = Record<string, unknown> | Array<Record<string, unknown>>;
+export type ReporteSeguimientoResumenKpis = Record<string, unknown>;
 
 export interface ReporteSeguimiento {
   id: string;
@@ -15,7 +16,7 @@ export interface ReporteSeguimiento {
   tareas_sin_fecha: number;
   tareas_en_plazo: number;
   kpis?: ReporteSeguimientoKpis | null;
-  resumen_kpis?: string | null;
+  resumen_kpis?: ReporteSeguimientoResumenKpis | null;
   kpi_cumplimiento_cronograma?: number | null;
   kpi_tasa_defectos?: number | null;
   kpi_productividad_equipo?: number | null;

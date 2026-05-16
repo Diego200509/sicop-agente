@@ -27,6 +27,7 @@ type ReportMetadata = {
   tareas_sin_fecha?: number;
   tareas_en_plazo?: number;
   kpis?: unknown;
+  resumen_kpis?: unknown;
   kpi_cumplimiento_cronograma?: number | string;
   kpi_tasa_defectos?: number | string;
   kpi_productividad_equipo?: number | string;
@@ -48,9 +49,10 @@ type ReportMetadata = {
 type GeneratePdfPayload = {
   html?: string;
   filename?: string;
-  metadata?: ReportMetadata;
+  metadata?: ReportMetadata | string;
   tareas_en_curso?: number | string;
   kpis?: unknown;
+  resumen_kpis?: unknown;
   kpi_cumplimiento_cronograma?: number | string;
   kpi_tasa_defectos?: number | string;
   kpi_productividad_equipo?: number | string;
@@ -1147,7 +1149,7 @@ function normalizeText(value: string): string {
 }
 
 function normalizePayloadMetadata(payload: GeneratePdfPayload): ReportMetadata | undefined {
-  const metadata: ReportMetadata = { ...(payload.metadata ?? {}) };
+  const metadata: ReportMetadata = { ...parsePayloadMetadata(payload.metadata) };
   const topLevelKpiKeys: Array<keyof Pick<
     GeneratePdfPayload,
     | "kpi_cumplimiento_cronograma"
@@ -1164,6 +1166,7 @@ function normalizePayloadMetadata(payload: GeneratePdfPayload): ReportMetadata |
   ];
 
   if (payload.kpis !== undefined) metadata.kpis = payload.kpis;
+  if (payload.resumen_kpis !== undefined) metadata.resumen_kpis = normalizeJsonObject(payload.resumen_kpis);
   if (payload.tareas_en_curso !== undefined) metadata.tareas_en_curso = Number(payload.tareas_en_curso);
 
   for (const key of topLevelKpiKeys) {
@@ -1182,6 +1185,43 @@ function normalizePayloadMetadata(payload: GeneratePdfPayload): ReportMetadata |
   if (payload.estado_presupuesto !== undefined) metadata.estado_presupuesto = payload.estado_presupuesto;
 
   return Object.keys(metadata).length > 0 ? metadata : undefined;
+}
+
+function parsePayloadMetadata(rawMetadata: GeneratePdfPayload["metadata"]): ReportMetadata {
+  if (rawMetadata == null) return {};
+  if (typeof rawMetadata === "string") {
+    try {
+      const parsed = JSON.parse(rawMetadata) as unknown;
+      if (parsed != null && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as ReportMetadata;
+      }
+    } catch (error) {
+      console.error("No se pudo parsear metadata JSON recibido desde n8n:", error);
+    }
+
+    return {};
+  }
+
+  return rawMetadata;
+}
+
+function normalizeJsonObject(value: unknown): Record<string, unknown> {
+  if (value != null && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      if (parsed != null && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      return { texto: value };
+    }
+  }
+
+  return {};
 }
 
 function buildPdfKpiItems(metadata?: ReportMetadata): PdfKpiItem[] {
@@ -1471,6 +1511,7 @@ async function persistGeneratedReport({
       tareas_sin_fecha: getMetadataNumber(metadata, "tareas_sin_fecha"),
       tareas_en_plazo: getMetadataNumber(metadata, "tareas_en_plazo"),
       kpis: getMetadataKpis(metadata),
+      resumen_kpis: getMetadataResumenKpis(metadata),
       kpi_cumplimiento_cronograma: getMetadataOptionalNumber(metadata, "kpi_cumplimiento_cronograma"),
       kpi_tasa_defectos: getMetadataOptionalNumber(metadata, "kpi_tasa_defectos"),
       kpi_productividad_equipo: getMetadataOptionalNumber(metadata, "kpi_productividad_equipo"),
@@ -1540,6 +1581,10 @@ function getMetadataString(metadata: ReportMetadata | undefined, key: keyof Repo
 
 function getMetadataKpis(metadata: ReportMetadata | undefined): unknown {
   return metadata?.kpis ?? null;
+}
+
+function getMetadataResumenKpis(metadata: ReportMetadata | undefined): Record<string, unknown> {
+  return normalizeJsonObject(metadata?.resumen_kpis);
 }
 
 function getMetadataPresupuesto(metadata: ReportMetadata | undefined): Record<string, unknown> | null {

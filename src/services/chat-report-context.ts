@@ -57,6 +57,14 @@ function stringifyCompact(value: unknown, maxChars: number): string {
   }
 }
 
+function hasJsonContent(value: unknown): boolean {
+  if (value == null) return false;
+  if (typeof value === "string") return value.trim().length > 0 && value.trim() !== "{}";
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === "object") return Object.keys(value).length > 0;
+  return true;
+}
+
 function getText(record: JsonRecord | null, keys: string[]): string | null {
   if (!record) return null;
   for (const key of keys) {
@@ -118,14 +126,27 @@ function buildBudgetContext(report: ReporteSeguimiento): string {
 }
 
 function buildKpiContext(report: ReporteSeguimiento): string {
-  if (!report.kpis && !report.resumen_kpis) {
+  const individualKpis = [
+    ["Cumplimiento cronograma", report.kpi_cumplimiento_cronograma],
+    ["Tasa de defectos", report.kpi_tasa_defectos],
+    ["Productividad equipo", report.kpi_productividad_equipo],
+    ["Cumplimiento requerimientos", report.kpi_cumplimiento_requerimientos],
+    ["Eficiencia flujo", report.kpi_eficiencia_flujo],
+  ]
+    .filter((entry): entry is [string, number] => typeof entry[1] === "number" && Number.isFinite(entry[1]))
+    .map(([label, value]) => `${label}: ${formatNumber(value, "%")}`);
+
+  if (!hasJsonContent(report.kpis) && !hasJsonContent(report.resumen_kpis) && individualKpis.length === 0) {
     return "## KPIs del ultimo reporte\nEl ultimo reporte no contiene KPIs registrados.";
   }
 
   return [
     "## KPIs del ultimo reporte",
-    report.resumen_kpis ? `Resumen KPIs: ${truncateText(report.resumen_kpis, 1200)}` : null,
-    report.kpis ? `KPIs registrados: ${stringifyCompact(report.kpis, 2200)}` : null,
+    hasJsonContent(report.resumen_kpis)
+      ? `Resumen KPIs: ${stringifyCompact(report.resumen_kpis, 1600)}`
+      : "Resumen KPIs: no hay resumen_kpis detallado registrado; usar KPIs principales como respaldo.",
+    hasJsonContent(report.kpis) ? `KPIs registrados: ${stringifyCompact(report.kpis, 2200)}` : null,
+    individualKpis.length > 0 ? `Valores individuales de KPIs:\n${individualKpis.join("\n")}` : null,
   ]
     .filter((line): line is string => Boolean(line))
     .join("\n");
@@ -297,4 +318,3 @@ export function buildTaskContext(task: TareaContext, latestReport: ReporteSeguim
     buildTrelloBudgetDescriptionContext(task),
   ].join("\n");
 }
-
