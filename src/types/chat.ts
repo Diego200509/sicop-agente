@@ -94,7 +94,6 @@ export interface TareaContext {
   fin?: string | null;
   completado?: boolean | null;
   estado?: string | null;
-  estado_seguimiento?: string | null;
   dateLastActivity?: string | null;
   fecha_sincronizacion?: string | null;
   fecha_revision?: string | null;

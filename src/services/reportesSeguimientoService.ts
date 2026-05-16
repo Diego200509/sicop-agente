@@ -161,6 +161,7 @@ export async function getLatestSeguimientoReport(): Promise<ReporteSeguimiento |
         "estado_presupuesto",
         "resumen_ia",
         "html_reporte",
+        "mensaje_html",
         "archivo_url",
         "estado",
         "metadata",

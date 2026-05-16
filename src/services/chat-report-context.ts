@@ -162,7 +162,7 @@ export function buildReportContext(report: ReporteSeguimiento | null): string {
   }
 
   const generatedAt = report.fecha_revision ?? report.created_at ?? report.enviado_en;
-  const narrative = report.resumen_ia?.trim() || htmlToUsefulText(report.html_reporte) || null;
+  const narrative = report.resumen_ia?.trim() || htmlToUsefulText(report.mensaje_html) || htmlToUsefulText(report.html_reporte) || null;
 
   return [
     "## Ultimo reporte de seguimiento n8n (fuente consolidada principal)",
@@ -309,7 +309,7 @@ export function buildTaskContext(task: TareaContext, latestReport: ReporteSeguim
     `Fecha operativa tarea/Trello: ${taskDate}`,
     `Frescura comparada: ${freshness}`,
     `Regla aplicada: ${freshnessNote}`,
-    `Estado Trello/tarea: ${task.estado_seguimiento ?? task.estado ?? "N/D"}`,
+    `Estado tarea: ${task.estado ?? "N/D"} (solo Pendiente/Cumplida; no representa En curso, Atrasada o Proxima)`,
     "",
     "### Presupuesto de la tarea segun ultimo reporte",
     detail ? stringifyCompact(detail, 1600) : "No se encontro detalle_por_tarea coincidente en el ultimo reporte.",

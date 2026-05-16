@@ -124,6 +124,25 @@ export class TareasRepository {
     return count ?? 0;
   }
 
+  async getTareasEnCurso(): Promise<TareaContext[]> {
+    const today = getEcuadorCalendarDate();
+    const { startIso, endIso } = getEcuadorDayBoundsIso(today);
+
+    const { data, error } = await this.supabase
+      .from("tareas")
+      .select(TAREA_CONTEXT_SELECT)
+      .eq("completado", false)
+      .lte("inicio", endIso)
+      .gte("fin", startIso)
+      .order("updated_at", { ascending: false });
+
+    if (error) {
+      throw new Error(`Error listando tareas en curso: ${error.message}`);
+    }
+
+    return ((data ?? []) as TareaContext[]).filter((task) => isTaskInProgress(task, today));
+  }
+
   /**
    * Lista acotada para resolver menciones de tarea en el chat general (titulos e ids).
    */
@@ -142,4 +161,78 @@ export class TareasRepository {
     const taskMap = new Map(((data ?? []) as TareaContext[]).map((task) => [task.id, task]));
     return ids.map((id) => taskMap.get(id)).filter((task): task is TareaContext => task != null);
   }
+}
+
+function normalizeStatus(value: string | null | undefined): string {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .trim();
+}
+
+function isTaskCompleted(task: TareaContext): boolean {
+  const taskWithLegacyFlag = task as TareaContext & { completada?: boolean | null };
+  const estado = normalizeStatus(task.estado);
+
+  return Boolean(
+    task.completado === true ||
+      taskWithLegacyFlag.completada === true ||
+      estado === "cumplida" ||
+      estado === "completada" ||
+      estado === "completado",
+  );
+}
+
+function isTaskInProgress(task: TareaContext, today: string): boolean {
+  if (isTaskCompleted(task)) return false;
+
+  const start = parseTaskCalendarDate(task.inicio);
+  const end = parseTaskCalendarDate(task.fin);
+  if (!start || !end) return false;
+
+  return start <= today && today <= end;
+}
+
+function parseTaskCalendarDate(value: string | null | undefined): string | null {
+  if (!value?.trim()) return null;
+  const clean = value.trim();
+  const isoDate = clean.match(/^\d{4}-\d{2}-\d{2}/)?.[0];
+  if (isoDate) return isoDate;
+
+  const localDate = clean.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (localDate) {
+    const [, day, month, year] = localDate;
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  }
+
+  const date = new Date(clean);
+  if (Number.isNaN(date.getTime())) return null;
+  return getEcuadorCalendarDate(date);
+}
+
+function getEcuadorCalendarDate(date = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Guayaquil",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+
+  return `${year}-${month}-${day}`;
+}
+
+function getEcuadorDayBoundsIso(calendarDate: string): { startIso: string; endIso: string } {
+  const [year, month, day] = calendarDate.split("-").map(Number);
+  const start = Date.UTC(year, month - 1, day, 5, 0, 0, 0);
+  const end = Date.UTC(year, month - 1, day + 1, 4, 59, 59, 999);
+
+  return {
+    startIso: new Date(start).toISOString(),
+    endIso: new Date(end).toISOString(),
+  };
 }

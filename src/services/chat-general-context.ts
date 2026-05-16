@@ -60,7 +60,10 @@ export function buildProjectContext(params: {
   let anyComparative = false;
 
   const headerLines = [
-    "Prioridad de fuentes: para estado general, presupuesto, KPIs, riesgos, recomendaciones y ultimo reporte, usa primero el ultimo reporte n8n. Usa Trello/tareas como fuente operativa secundaria o para nombres de tareas.",
+    "Prioridad de fuentes: para estado general, presupuesto, KPIs, riesgos, recomendaciones, ultimo reporte y tareas en curso, usa primero el ultimo reporte n8n. Para tareas en curso, si tareas_en_curso > 0, extrae el detalle unicamente de la seccion exacta 'Tareas en curso' del reporte y no afirmes que no hay tareas en curso.",
+    "Para tareas completadas, en curso, proximas, atrasadas o sin fecha, extrae tareas desde la seccion exacta correspondiente del reporte y no mezcles secciones. Si en plazo solo tiene conteo, informa el conteo sin inventar nombres.",
+    "No uses la seccion 'Tareas completadas', ni una tarea por pertenecer a Seguimiento y Control, ni una tarea por tener fechas cercanas para responder tareas en curso.",
+    "Si necesitas usar la tabla tareas como respaldo, calcula en curso con inicio <= fecha actual <= fin y completado = false. No uses estado_seguimiento: esa columna no existe en public.tareas. La columna estado solo representa Pendiente o Cumplida.",
     latestReport
       ? `Ultimo reporte cargado: ${latestReport.titulo} (${latestReport.fecha_revision ?? latestReport.created_at}).`
       : "No existe un reporte de seguimiento generado todavia.",
@@ -239,7 +242,7 @@ function buildOperationalInsights(
     const doc = pair?.doc ?? null;
     const phaseMode = getPhaseMode(task.fase);
     const code = phaseMode === "mixto" ? (pair?.code ?? null) : null;
-    const normalizedStatus = `${task.estado ?? ""} ${task.estado_seguimiento ?? ""}`.toLowerCase();
+    const normalizedStatus = `${task.estado ?? ""}`.toLowerCase();
     const completed =
       task.completado === true ||
       normalizedStatus.includes("cumplida") ||
@@ -369,7 +372,7 @@ function formatPriorityLine(i: TaskOperationalInsight): string {
 }
 
 function formatTaskBrief(i: TaskOperationalInsight): string {
-  return `- ${i.task.id_tarea} | ${i.task.titulo} | Fase: ${i.task.fase} | Estado Trello: ${i.task.estado_seguimiento ?? i.task.estado ?? "N/D"} | Inicio: ${i.inicioLabel} | Fin: ${i.finLabel} | Enlace: ${i.task.url_tarjeta?.trim() || "N/D"}`;
+  return `- ${i.task.id_tarea} | ${i.task.titulo} | Fase: ${i.task.fase} | Estado: ${i.task.estado ?? "N/D"} | Inicio: ${i.inicioLabel} | Fin: ${i.finLabel} | Enlace: ${i.task.url_tarjeta?.trim() || "N/D"}`;
 }
 
 function buildOperationalStateGroups(insights: TaskOperationalInsight[]): string {
@@ -413,7 +416,7 @@ function buildOperationalStateGroups(insights: TaskOperationalInsight[]): string
 
   return [
     "## Tareas operativas agrupadas desde Trello/local",
-    "Definiciones aplicadas: en curso = no completada con fecha actual entre inicio y fin; proxima = no completada y vence en 3 dias o menos sin estar ya en curso; atrasada = no completada con fecha fin vencida; en plazo = pendiente fuera de esas categorias.",
+    "Definiciones operativas secundarias: en curso = no completada con fecha actual entre inicio y fin; proxima = no completada y vence en 3 dias o menos sin estar ya en curso; atrasada = no completada con fecha fin vencida; en plazo = pendiente fuera de esas categorias. Para preguntas directas sobre tareas en curso, el corte consolidado principal es tareas_en_curso y la seccion 'Tareas en curso' del ultimo reporte n8n.",
     section("En curso", inProgress),
     section("Proximas", upcoming),
     section("Atrasadas", overdue),

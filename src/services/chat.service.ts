@@ -8,6 +8,12 @@ import { TareasRepository } from "@/src/repositories/tareas.repository";
 import { assembleSingleTaskModelContext } from "@/src/services/chat-context-assembly";
 import { buildGeneralContext, buildTaskFocusedContext } from "@/src/services/chat-general-context";
 import { resolveGeneralTaskFromMessage } from "@/src/services/chat-general-resolution";
+import {
+  answerActiveTasksQuestion,
+  answerTaskStatusReportQuestion,
+  isActiveTasksQuestion,
+  isTaskStatusClassificationQuestion,
+} from "@/src/services/chat-active-tasks";
 import { detectQuestionKind, detectUserIntent } from "@/src/lib/chat-user-intent";
 import { buildChatSystemPrompt } from "@/src/services/chat-system-prompt";
 import { getLatestSeguimientoReport } from "@/src/services/reportesSeguimientoService";
@@ -133,6 +139,28 @@ export class ChatService {
 
     let contextText: string;
     let promptMeta: ChatPromptMeta = DEFAULT_PROMPT_META;
+
+    if (!tareaUuid && isTaskStatusClassificationQuestion(trimmed)) {
+      const reply = await answerTaskStatusReportQuestion(trimmed, this.tareasRepo);
+      const saved = await this.chatRepo.insertMessage({
+        tareaId: null,
+        rol: "assistant",
+        mensaje: reply,
+      });
+
+      return { reply, messageIdAssistant: saved.id };
+    }
+
+    if (!tareaUuid && isActiveTasksQuestion(trimmed)) {
+      const reply = await answerActiveTasksQuestion(this.tareasRepo);
+      const saved = await this.chatRepo.insertMessage({
+        tareaId: null,
+        rol: "assistant",
+        mensaje: reply,
+      });
+
+      return { reply, messageIdAssistant: saved.id };
+    }
 
     if (tareaUuid) {
       const built = await this.buildContext(tareaUuid, contextOpts);

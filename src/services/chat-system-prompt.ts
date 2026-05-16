@@ -6,6 +6,14 @@ function appendReportSourceRules(meta: ChatPromptMeta): string[] {
     "## Fuentes SICOP: reporte n8n vs Trello",
     "El proyecto tiene dos fuentes: el ultimo reporte de seguimiento n8n (fotografia consolidada) y las tareas/Trello sincronizadas (estado operativo).",
     "Para preguntas generales del proyecto, presupuesto, KPIs, riesgos, recomendaciones, estado consolidado y ultimo reporte, prioriza el bloque 'Ultimo reporte de seguimiento n8n'.",
+    "Para tareas en curso, usa primero el ultimo reporte de seguimiento. Si tareas_en_curso > 0, nunca respondas que no hay tareas en curso.",
+    "Para responder sobre tareas completadas, en curso, proximas, atrasadas o sin fecha, usa primero el ultimo reporte de seguimiento y extrae las tareas desde la seccion exacta del reporte. No mezcles secciones.",
+    "No clasifiques una tarea completada como en curso o en plazo. Si el reporte solo tiene conteo para en plazo y no lista de tareas, informa el conteo y no inventes nombres.",
+    "Extrae la informacion unicamente desde la seccion exacta 'Tareas en curso' de mensaje_html o html_reporte. No uses tareas completadas ni la primera tarea de la fase Seguimiento y Control.",
+    "La seccion 'Tareas en curso' puede traer una tabla con Titulo, Fase, Fecha Inicio, Fecha Fin, Dias Restantes y URL. No uses la seccion 'Tareas completadas' para responder tareas en curso.",
+    "Si necesitas usar la tabla tareas como respaldo, calcula el estado en curso con inicio, fin y completado: completado = false, inicio <= fecha actual y fin >= fecha actual.",
+    "No consultes ni uses estado_seguimiento porque no existe en public.tareas. La columna estado solo puede ser Pendiente o Cumplida; no representa En curso, Atrasada ni Proxima.",
+    "Nunca muestres como en curso una tarea con completado/completada = true o con estado Completada.",
     "Para preguntas sobre una tarea especifica, usa Trello/tarea sincronizada para estado operativo si es mas reciente, y usa detalle_por_tarea del reporte para presupuesto si existe.",
     "Para preguntas de cumplimiento documental, prioriza el texto fuente recuperado, el texto PDF y el analisis_documental de la tarea; el reporte solo complementa.",
     "Para preguntas tecnicas o de implementacion, prioriza revision de codigo, Pull Request, codigo_pr y analisis_codigo; el reporte solo complementa.",
@@ -433,7 +441,8 @@ function appendQuestionKindRules(meta: ChatPromptMeta): string[] {
       ...common,
       "Tipo detectado: conteos de tareas.",
       "Para conteos generales usa primero total_tareas, tareas_completadas, tareas_en_curso, tareas_proximas, tareas_atrasadas, tareas_sin_fecha y tareas_en_plazo del ultimo reporte.",
-      "Si el usuario pide nombres exactos de tareas, usa las tareas sincronizadas desde Trello del contexto.",
+      "Para nombres exactos de tareas en curso usa solo la seccion exacta 'Tareas en curso' del ultimo reporte; no uses tareas completadas ni tareas de Seguimiento y Control por inferencia. Usa Trello/tareas sincronizadas solo como respaldo si no se puede extraer esa seccion.",
+      "Si Trello y el reporte difieren, indica que el reporte es el ultimo corte consolidado y que Trello puede estar desfasado.",
     ];
   }
 

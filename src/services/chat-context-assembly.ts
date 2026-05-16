@@ -181,7 +181,6 @@ export function assembleSingleTaskModelContext(params: {
     `Titulo: ${tarea.titulo}`,
     `Fase: ${tarea.fase}`,
     ...formatTaskOperationalMetadata(tarea),
-    `Estado seguimiento: ${tarea.estado_seguimiento?.trim() || "N/D"}`,
     `Ultima actividad Trello: ${tarea.dateLastActivity?.trim() || "N/D"}`,
     `Actualizado en: ${tarea.updated_at?.trim() || "N/D"}`,
     `Fecha sincronizacion: ${tarea.fecha_sincronizacion?.trim() || "N/D"}`,
