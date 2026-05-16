@@ -645,7 +645,9 @@ function formatDateEcuador(
     dateStyle: "medium",
     timeStyle: options.includeTime && hasTime(value) ? "short" : undefined,
     timeZone: "America/Guayaquil",
-  }).format(date);
+  })
+    .format(date)
+    .replace(/\u00a0/g, " ");
 }
 
 function parseDate(value: string): Date | null {
