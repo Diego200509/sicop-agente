@@ -1,8 +1,9 @@
 "use client";
 
 import { CircleDollarSign, ClipboardList, FileText, LayoutDashboard, MessageSquare } from "lucide-react";
-import { motion, useReducedMotion } from "framer-motion";
+import { motion } from "framer-motion";
 import { MotionLink } from "@/src/components/ui/motion-press";
+import { usePrefersReducedMotion } from "@/src/hooks/use-prefers-reduced-motion";
 import { cn } from "@/src/lib/utils";
 
 type SidebarNavProps = {
@@ -22,7 +23,7 @@ const navItems = [
 ] as const;
 
 export function SidebarNav({ id, currentPath, className, onNavigate, collapsed }: SidebarNavProps) {
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = usePrefersReducedMotion();
   const labelTransition = reduceMotion
     ? { duration: 0 }
     : { duration: 0.24, ease: [0.22, 1, 0.36, 1] as const };
@@ -58,13 +59,17 @@ export function SidebarNav({ id, currentPath, className, onNavigate, collapsed }
               aria-hidden
             />
             <motion.span
+              initial={false}
               animate={{
                 opacity: collapsed ? 0 : 1,
                 maxWidth: collapsed ? 0 : 160,
               }}
               transition={labelTransition}
               className="inline-block overflow-hidden whitespace-nowrap"
-              style={{ pointerEvents: collapsed ? "none" : "auto" }}
+              style={{
+                maxWidth: collapsed ? 0 : 160,
+                pointerEvents: collapsed ? "none" : "auto",
+              }}
               aria-hidden={collapsed}
             >
               {item.label}

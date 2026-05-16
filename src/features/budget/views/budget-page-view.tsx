@@ -1,7 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useMemo, useRef, useState } from "react";
 import { FileText } from "lucide-react";
 
 import { AppPageShell } from "@/src/components/layout/app-page-shell";
@@ -20,7 +19,7 @@ type BudgetPageViewProps = {
 };
 
 export function BudgetPageView({ reportes, initialReporteId, initialError }: BudgetPageViewProps) {
-  const router = useRouter();
+  const selectedReportRef = useRef<HTMLDivElement | null>(null);
   const fallbackReporteId = reportes[0]?.id ?? "";
   const initialId = initialReporteId && reportes.some((reporte) => reporte.id === initialReporteId)
     ? initialReporteId
@@ -34,7 +33,10 @@ export function BudgetPageView({ reportes, initialReporteId, initialError }: Bud
 
   const selectReporte = (id: string) => {
     setSelectedReporteId(id);
-    router.replace(`/presupuesto?reporteId=${encodeURIComponent(id)}`, { scroll: false });
+    window.history.replaceState(null, "", `/presupuesto?reporteId=${encodeURIComponent(id)}`);
+    window.requestAnimationFrame(() => {
+      selectedReportRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   };
 
   return (
@@ -62,16 +64,18 @@ export function BudgetPageView({ reportes, initialReporteId, initialError }: Bud
 
       {selectedReporte ? (
         <>
-          <SectionCard
-            title="Reporte seleccionado"
-            description={`Fecha de revision: ${formatBudgetDate(selectedReporte.fecha_revision)}`}
-          >
-            <BudgetReportSelector
-              reportes={reportes}
-              selectedReporteId={selectedReporte.id}
-              onChange={selectReporte}
-            />
-          </SectionCard>
+          <div ref={selectedReportRef}>
+            <SectionCard
+              title="Reporte seleccionado"
+              description={`Fecha de revision: ${formatBudgetDate(selectedReporte.fecha_revision)}`}
+            >
+              <BudgetReportSelector
+                reportes={reportes}
+                selectedReporteId={selectedReporte.id}
+                onChange={selectReporte}
+              />
+            </SectionCard>
+          </div>
 
           <BudgetDetailView reporte={selectedReporte} />
 
@@ -87,4 +91,3 @@ export function BudgetPageView({ reportes, initialReporteId, initialError }: Bud
     </AppPageShell>
   );
 }
-

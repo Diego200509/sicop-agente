@@ -3,15 +3,15 @@
 import {
   AnimatePresence,
   motion,
-  useReducedMotion,
   type Transition,
 } from "framer-motion";
 import { ChevronLeft } from "lucide-react";
 import Image from "next/image";
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { SidebarNav } from "@/src/components/layout/sidebar-nav";
 import { MotionButton } from "@/src/components/ui/motion-press";
+import { usePrefersReducedMotion } from "@/src/hooks/use-prefers-reduced-motion";
 import { cn } from "@/src/lib/utils";
 
 const SIDEBAR_COLLAPSED_KEY = "sicop-sidebar-collapsed";
@@ -29,7 +29,7 @@ const SIDEBAR_COLLAPSED_LOGO = "/sidebar-brand-collapsed.png";
 export function AppShell({ children, currentPath }: AppShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = usePrefersReducedMotion();
 
   const sidebarTransition =
     reduceMotion === true
@@ -38,14 +38,18 @@ export function AppShell({ children, currentPath }: AppShellProps) {
 
   const brandTransition = reduceMotion === true ? { duration: 0.05 } : { duration: 0.22, ease: [0.22, 1, 0.36, 1] as const };
 
-  useLayoutEffect(() => {
-    try {
-      if (localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1") {
-        setSidebarCollapsed(true);
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      try {
+        if (localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1") {
+          setSidebarCollapsed(true);
+        }
+      } catch {
+        /* ignore */
       }
-    } catch {
-      /* ignore */
-    }
+    });
+
+    return () => window.cancelAnimationFrame(frame);
   }, []);
 
   useEffect(() => {
@@ -118,6 +122,7 @@ export function AppShell({ children, currentPath }: AppShellProps) {
               <ChevronLeft className="size-5" aria-hidden />
             </motion.span>
             <motion.span
+              initial={false}
               animate={{
                 opacity: sidebarCollapsed ? 0 : 1,
                 maxWidth: sidebarCollapsed ? 0 : 120,
@@ -128,6 +133,7 @@ export function AppShell({ children, currentPath }: AppShellProps) {
                   : { duration: 0.22, ease: [0.22, 1, 0.36, 1] }
               }
               className="overflow-hidden whitespace-nowrap text-xs font-medium"
+              style={{ maxWidth: sidebarCollapsed ? 0 : 120 }}
               aria-hidden={sidebarCollapsed}
             >
               Contraer
