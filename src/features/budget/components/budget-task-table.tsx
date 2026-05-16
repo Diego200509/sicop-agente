@@ -6,6 +6,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/src/components/ui/table";
+import { Badge } from "@/src/components/ui/badge";
 import type { BudgetRecord } from "@/src/features/budget/types/budget.types";
 import { getDisplayValue, getMoneyValue } from "@/src/features/budget/utils/budget-mappers";
 
@@ -41,7 +42,9 @@ export function BudgetTaskTable({ rows }: { rows: BudgetRecord[] }) {
                 {getDisplayValue(row, ["tarea", "titulo", "nombre", "nombre_tarea"], "Sin tarea")}
               </TableCell>
               <TableCell>{getDisplayValue(row, ["fase", "nombre_fase"], "Sin fase")}</TableCell>
-              <TableCell>{getDisplayValue(row, ["estado_seguimiento", "estado"], "No definido")}</TableCell>
+              <TableCell>
+                <TaskStatusBadge row={row} />
+              </TableCell>
               <TableCell className="text-right tabular-nums">
                 {getMoneyValue(row, ["costo_estimado", "presupuesto_estimado", "estimado"])}
               </TableCell>
@@ -68,3 +71,38 @@ export function BudgetTaskTable({ rows }: { rows: BudgetRecord[] }) {
   );
 }
 
+function TaskStatusBadge({ row }: { row: BudgetRecord }) {
+  const status = getTaskStatus(row);
+  const normalizedStatus = status.trim().toLowerCase();
+  const variant =
+    normalizedStatus === "completada" || normalizedStatus === "cumplida"
+      ? "success"
+      : normalizedStatus === "no definido"
+        ? "default"
+        : "secondary";
+
+  return (
+    <Badge variant={variant} className="w-fit capitalize">
+      {status}
+    </Badge>
+  );
+}
+
+function getTaskStatus(row: BudgetRecord): string {
+  const estadoSeguimiento = getStringValue(row.estado_seguimiento);
+  if (estadoSeguimiento) return estadoSeguimiento;
+
+  const estado = getStringValue(row.estado);
+  if (estado) return estado;
+
+  if (row.completada === true) return "Completada";
+
+  return "No definido";
+}
+
+function getStringValue(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+
+  const text = value.trim();
+  return text ? text : null;
+}
