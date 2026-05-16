@@ -2,6 +2,8 @@ import type { ChatRepository } from "@/src/repositories/chat.repository";
 import type { RevisionesRepository } from "@/src/repositories/revisiones.repository";
 import type { TareasRepository } from "@/src/repositories/tareas.repository";
 import { getChatGeneralConfig, type ChatGeneralConfig } from "@/src/lib/chat-general-config";
+import { getLatestSeguimientoReport } from "@/src/services/reportesSeguimientoService";
+import { buildReportContext } from "@/src/services/chat-report-context";
 import {
   buildCrossTaskDocumentEvidenceBlock,
   buildPrimarySectionCitation,
@@ -21,6 +23,7 @@ import {
 } from "@/src/services/chat-context-assembly";
 import { FASES_TABLERO, getPhaseMode, normalizePhase } from "@/src/lib/fases";
 import type { ChatPromptMeta, ChatQuestionKind, ChatUserIntent, RevisionContext, TareaContext } from "@/src/types/chat";
+import type { ReporteSeguimiento } from "@/src/types/reporte-seguimiento";
 
 export type BuiltChatContext = {
   contextText: string;
@@ -49,13 +52,18 @@ export function buildProjectContext(params: {
   totalTasksAvailable: number;
   config: ChatGeneralConfig;
   comparisonLimits: RevisionFormatLimits;
+  latestReport?: ReporteSeguimiento | null;
 }): BuildProjectContextResult {
-  const { tasks, revMap, totalTasksAvailable, config, comparisonLimits } = params;
+  const { tasks, revMap, totalTasksAvailable, config, comparisonLimits, latestReport } = params;
   const loadedCount = tasks.length;
   const isPartial = totalTasksAvailable > loadedCount;
   let anyComparative = false;
 
   const headerLines = [
+    "Prioridad de fuentes: para estado general, presupuesto, KPIs, riesgos, recomendaciones y ultimo reporte, usa primero el ultimo reporte n8n. Usa Trello/tareas como fuente operativa secundaria o para nombres de tareas.",
+    latestReport
+      ? `Ultimo reporte cargado: ${latestReport.titulo} (${latestReport.fecha_revision ?? latestReport.created_at}).`
+      : "No existe un reporte de seguimiento generado todavia.",
     isPartial
       ? `Actualmente tengo contexto de ${loadedCount} de ${totalTasksAvailable} tareas disponibles, por lo que el analisis puede ser parcial.`
       : `El analisis considera las ${loadedCount} tareas registradas del tablero SICOP.`,
@@ -130,7 +138,7 @@ export function buildProjectContext(params: {
   }
 
   return {
-    text: [headerLines.join("\n"), "", ...phaseSections].join("\n"),
+    text: [buildReportContext(latestReport ?? null), "", headerLines.join("\n"), "", ...phaseSections].join("\n"),
     anyComparative,
   };
 }
@@ -231,7 +239,12 @@ function buildOperationalInsights(
     const doc = pair?.doc ?? null;
     const phaseMode = getPhaseMode(task.fase);
     const code = phaseMode === "mixto" ? (pair?.code ?? null) : null;
-    const completed = task.completado === true || task.estado === "Cumplida";
+    const normalizedStatus = `${task.estado ?? ""} ${task.estado_seguimiento ?? ""}`.toLowerCase();
+    const completed =
+      task.completado === true ||
+      normalizedStatus.includes("cumplida") ||
+      normalizedStatus.includes("completada") ||
+      normalizedStatus.includes("completado");
     const status = completed ? "Cumplida" : "Pendiente";
     const dueAt = parseTaskDate(task.fin);
     const daysLate = !completed && dueAt && dueAt.getTime() < now.getTime() ? Math.max(0, daysBetween(now, dueAt)) : null;
@@ -355,6 +368,61 @@ function formatPriorityLine(i: TaskOperationalInsight): string {
   return `- ${i.priorityLabel} (${i.priorityScore}): ${i.task.titulo} | Fase: ${i.task.fase} | Estado: ${i.status} | Inicio: ${i.inicioLabel} | Fin: ${i.finLabel} | Motivos: ${reasons} | Enlace: ${i.task.url_tarjeta?.trim() || "N/D"}`;
 }
 
+function formatTaskBrief(i: TaskOperationalInsight): string {
+  return `- ${i.task.id_tarea} | ${i.task.titulo} | Fase: ${i.task.fase} | Estado Trello: ${i.task.estado_seguimiento ?? i.task.estado ?? "N/D"} | Inicio: ${i.inicioLabel} | Fin: ${i.finLabel} | Enlace: ${i.task.url_tarjeta?.trim() || "N/D"}`;
+}
+
+function buildOperationalStateGroups(insights: TaskOperationalInsight[]): string {
+  const now = new Date();
+  const inProgress: TaskOperationalInsight[] = [];
+  const upcoming: TaskOperationalInsight[] = [];
+  const overdue: TaskOperationalInsight[] = [];
+  const completed: TaskOperationalInsight[] = [];
+  const onTrack: TaskOperationalInsight[] = [];
+  const withoutDates: TaskOperationalInsight[] = [];
+
+  for (const insight of insights) {
+    const start = parseTaskDate(insight.task.inicio);
+    const end = parseTaskDate(insight.task.fin);
+    if (insight.completed) {
+      completed.push(insight);
+      continue;
+    }
+    if (!start || !end) {
+      withoutDates.push(insight);
+      continue;
+    }
+    if (end.getTime() < now.getTime()) {
+      overdue.push(insight);
+      continue;
+    }
+    if (start.getTime() <= now.getTime() && now.getTime() <= end.getTime()) {
+      inProgress.push(insight);
+      continue;
+    }
+    const daysToDue = Math.ceil((end.getTime() - now.getTime()) / 86_400_000);
+    if (daysToDue <= 3) {
+      upcoming.push(insight);
+      continue;
+    }
+    onTrack.push(insight);
+  }
+
+  const section = (title: string, items: TaskOperationalInsight[]) =>
+    [`### ${title} (${items.length})`, ...(items.length > 0 ? items.map(formatTaskBrief) : ["- Ninguna."])].join("\n");
+
+  return [
+    "## Tareas operativas agrupadas desde Trello/local",
+    "Definiciones aplicadas: en curso = no completada con fecha actual entre inicio y fin; proxima = no completada y vence en 3 dias o menos sin estar ya en curso; atrasada = no completada con fecha fin vencida; en plazo = pendiente fuera de esas categorias.",
+    section("En curso", inProgress),
+    section("Proximas", upcoming),
+    section("Atrasadas", overdue),
+    section("Completadas", completed),
+    section("En plazo", onTrack),
+    section("Sin fecha suficiente", withoutDates),
+  ].join("\n\n");
+}
+
 function buildMissingDataBlock(insights: TaskOperationalInsight[]): string {
   const categories: Array<[string, (i: TaskOperationalInsight) => boolean]> = [
     ["Sin fecha inicio", (i) => !i.task.inicio?.trim()],
@@ -434,8 +502,9 @@ function buildFocusedContextByQuestionKind(params: {
   revMap: Map<string, RevisionPair>;
   totalTasksAvailable: number;
   config: ChatGeneralConfig;
+  latestReport?: ReporteSeguimiento | null;
 }): string {
-  const { questionKind, tasks, revMap, totalTasksAvailable, config } = params;
+  const { questionKind, tasks, revMap, totalTasksAvailable, config, latestReport } = params;
   const insights = buildOperationalInsights(tasks, revMap);
   const sortedByPhase = [...insights].sort((a, b) => {
     const phase = normalizePhase(a.task.fase).localeCompare(normalizePhase(b.task.fase), "es");
@@ -445,6 +514,8 @@ function buildFocusedContextByQuestionKind(params: {
   const isPartial = totalTasksAvailable > tasks.length;
 
   const base = [
+    buildReportContext(latestReport ?? null),
+    "",
     "## Contexto operativo enfocado del proyecto SICOP",
     isPartial
       ? `Contexto cargado: ${tasks.length} de ${totalTasksAvailable} tareas disponibles.`
@@ -453,6 +524,8 @@ function buildFocusedContextByQuestionKind(params: {
     "",
     "## Metricas operativas",
     ...summarizeOperationalMetrics(insights).map((line) => `- ${line}`),
+    "",
+    buildOperationalStateGroups(insights),
   ];
 
   if (questionKind === "task_list") {
@@ -532,9 +605,10 @@ export async function buildGeneralContext(
   config: ChatGeneralConfig = getChatGeneralConfig(),
   options?: ChatContextBuildOptions,
 ): Promise<BuiltChatContext> {
-  const [tareas, totalTareasDisponibles] = await Promise.all([
+  const [tareas, totalTareasDisponibles, latestReport] = await Promise.all([
     tareasRepo.getLatestReviewedForGeneralChat(config.maxTasks),
     tareasRepo.countAllForGeneralChat(),
+    getLatestSeguimientoReport(),
   ]);
   const ids = tareas.map((t) => t.id);
   const revMap = await revisionesRepo.getLatestDocAndCodeForTareas(ids);
@@ -557,6 +631,7 @@ export async function buildGeneralContext(
           revMap,
           totalTasksAvailable: totalTareasDisponibles,
           config,
+          latestReport,
         }),
         anyComparative: hasAnyComparativeContext(tareas, revMap),
       }
@@ -566,6 +641,7 @@ export async function buildGeneralContext(
         totalTasksAvailable: totalTareasDisponibles,
         config,
         comparisonLimits,
+        latestReport,
       });
 
   let contextText = [
@@ -620,6 +696,7 @@ export async function buildGeneralContext(
     comparativeActive: projectContext.anyComparative,
     generalBroad: true,
     questionKind,
+    latestReportAvailable: Boolean(latestReport),
     projectTasksLoaded: tareas.length,
     projectTasksAvailable: totalTareasDisponibles,
     documentEvidenceActive,
@@ -664,10 +741,11 @@ export async function buildTaskFocusedContext(
     maxCodeAnalysis: config.focusMaxAnalysis,
   };
 
-  const [doc, code, history] = await Promise.all([
+  const [doc, code, history, latestReport] = await Promise.all([
     revisionesRepo.getLatestByType(tareaUuid, "documental"),
     phaseMode === "mixto" ? revisionesRepo.getLatestByType(tareaUuid, "codigo") : Promise.resolve(null),
     chatRepo.getLastMessagesForContext(null, 6),
+    getLatestSeguimientoReport(),
   ]);
 
   const assembled = assembleSingleTaskModelContext({
@@ -681,6 +759,7 @@ export async function buildTaskFocusedContext(
     maxHistoryMsg: 1500,
     userMessage: options?.userMessage,
     intent: options?.intent,
+    latestReport,
   });
 
   return {
@@ -691,6 +770,7 @@ export async function buildTaskFocusedContext(
       codePrEvidenceActive: assembled.codePrEvidenceActive,
       generalBroad: false,
       questionKind: options?.questionKind ?? "general",
+      latestReportAvailable: Boolean(latestReport),
       documentEvidenceActive: assembled.documentEvidenceActive,
       documentEvidenceCount: assembled.documentEvidenceCount,
       documentQuestionType: assembled.documentQuestionType,

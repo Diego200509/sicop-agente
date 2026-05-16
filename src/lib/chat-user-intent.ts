@@ -72,6 +72,81 @@ export function detectQuestionKind(message: string): ChatQuestionKind {
 
   if (
     includesAny(norm, [
+      "ultimo reporte",
+      "ultimo informe",
+      "que dice el reporte",
+      "reporte de seguimiento",
+      "reporte automatico",
+      "reporte ia",
+      "reporte n8n",
+    ])
+  ) {
+    return "latest_report";
+  }
+
+  if (
+    includesAny(norm, [
+      "presupuesto",
+      "presupuestario",
+      "sobrecosto",
+      "costo real",
+      "costo estimado",
+      "saldo disponible",
+      "ejecucion presupuestaria",
+      "variacion costo",
+      "fase consume",
+    ])
+  ) {
+    return "budget";
+  }
+
+  if (
+    includesAny(norm, [
+      "kpi",
+      "kpis",
+      "indicadores",
+      "cumplimiento cronograma",
+      "tasa de defectos",
+      "productividad",
+      "cumplimiento requerimientos",
+      "eficiencia de flujo",
+    ])
+  ) {
+    return "kpis";
+  }
+
+  if (
+    includesAny(norm, [
+      "recomendacion",
+      "recomendaciones",
+      "sugerencia",
+      "sugerencias",
+      "proximas acciones",
+      "prÃ³ximas acciones",
+    ])
+  ) {
+    return "recommendations";
+  }
+
+  if (
+    includesAny(norm, [
+      "cuantas tareas",
+      "cuantos tareas",
+      "tareas en curso",
+      "tareas proximas",
+      "tareas prÃ³ximas",
+      "tareas completadas",
+      "tareas en plazo",
+      "tareas sin fecha",
+      "cuantas estan en curso",
+      "cuantas estan completadas",
+    ])
+  ) {
+    return "task_status_counts";
+  }
+
+  if (
+    includesAny(norm, [
       "resumen ejecutivo",
       "modo ejecutivo",
       "dame resumen ejecutivo",

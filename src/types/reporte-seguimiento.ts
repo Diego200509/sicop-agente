@@ -15,6 +15,7 @@ export interface ReporteSeguimiento {
   tareas_sin_fecha: number;
   tareas_en_plazo: number;
   kpis?: ReporteSeguimientoKpis | null;
+  resumen_kpis?: string | null;
   kpi_cumplimiento_cronograma?: number | null;
   kpi_tasa_defectos?: number | null;
   kpi_productividad_equipo?: number | null;
@@ -28,6 +29,7 @@ export interface ReporteSeguimiento {
   ejecucion_presupuestaria?: number;
   estado_presupuesto?: string;
   html_reporte?: string | null;
+  resumen_ia?: string | null;
   mensaje_html?: string | null;
   archivo_nombre?: string | null;
   archivo_url?: string | null;

@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { TareaContext } from "@/src/types/chat";
 
 const TAREA_CONTEXT_SELECT =
-  "id,id_tarea,titulo,fase,descripcion,url_tarjeta,inicio,fin,completado,estado,created_at";
+  "id,id_tarea,titulo,fase,descripcion,url_tarjeta,inicio,fin,completado,estado,created_at,updated_at";
 
 export class TareasRepository {
   constructor(private readonly supabase: SupabaseClient) {}

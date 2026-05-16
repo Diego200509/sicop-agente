@@ -10,6 +10,7 @@ import { buildGeneralContext, buildTaskFocusedContext } from "@/src/services/cha
 import { resolveGeneralTaskFromMessage } from "@/src/services/chat-general-resolution";
 import { detectQuestionKind, detectUserIntent } from "@/src/lib/chat-user-intent";
 import { buildChatSystemPrompt } from "@/src/services/chat-system-prompt";
+import { getLatestSeguimientoReport } from "@/src/services/reportesSeguimientoService";
 import type { ChatContext, ChatPromptMeta, ChatQuestionKind, ChatResponse, ChatUserIntent } from "@/src/types/chat";
 
 const DEFAULT_PROMPT_META: ChatPromptMeta = {
@@ -62,10 +63,11 @@ export class ChatService {
         maxCodeAnalysis: config.focusMaxAnalysis,
       };
 
-      const [doc, code, history] = await Promise.all([
+      const [doc, code, history, latestReport] = await Promise.all([
         this.revisionesRepo.getLatestByType(tareaUuid, "documental"),
         phaseMode === "mixto" ? this.revisionesRepo.getLatestByType(tareaUuid, "codigo") : Promise.resolve(null),
         this.chatRepo.getLastMessagesForContext(tareaUuid, 6),
+        getLatestSeguimientoReport(),
       ]);
 
       const assembled = assembleSingleTaskModelContext({
@@ -79,6 +81,7 @@ export class ChatService {
         maxHistoryMsg: 1500,
         userMessage: opts?.userMessage,
         intent: opts?.intent,
+        latestReport,
       });
 
       return {
@@ -90,6 +93,7 @@ export class ChatService {
           codePrEvidenceActive: assembled.codePrEvidenceActive,
           generalBroad: false,
           questionKind: opts?.questionKind ?? "general",
+          latestReportAvailable: Boolean(latestReport),
           documentEvidenceActive: assembled.documentEvidenceActive,
           documentEvidenceCount: assembled.documentEvidenceCount,
           documentQuestionType: assembled.documentQuestionType,
@@ -137,13 +141,23 @@ export class ChatService {
     } else {
       const config = getChatGeneralConfig();
       const pool = await this.tareasRepo.listForMatching(config.matchingPool);
-      const matchTasks = pool.map((t) => ({ id: t.id, id_tarea: t.id_tarea, titulo: t.titulo }));
+      const matchTasks = pool.map((t) => ({
+        id: t.id,
+        id_tarea: t.id_tarea,
+        titulo: t.titulo,
+        fase: t.fase,
+        descripcion: t.descripcion,
+        url_tarjeta: t.url_tarjeta,
+      }));
       const forceGeneralContext =
         questionKind === "task_list" ||
         questionKind === "project_status" ||
         questionKind === "overdue" ||
         questionKind === "executive_summary" ||
-        questionKind === "priority_ranking";
+        questionKind === "priority_ranking" ||
+        questionKind === "latest_report" ||
+        questionKind === "kpis" ||
+        questionKind === "task_status_counts";
 
       const resolution = forceGeneralContext
         ? ({ kind: "none" } as const)

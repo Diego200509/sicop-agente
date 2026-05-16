@@ -10,7 +10,12 @@ export type ChatQuestionKind =
   | "overdue"
   | "risks"
   | "executive_summary"
-  | "priority_ranking";
+  | "priority_ranking"
+  | "budget"
+  | "kpis"
+  | "latest_report"
+  | "recommendations"
+  | "task_status_counts";
 
 export type { DocumentQuestionType } from "@/src/lib/document-sections";
 
@@ -48,6 +53,8 @@ export interface ChatPromptMeta {
   questionKind?: ChatQuestionKind;
   /** true si el contexto incluye fragmentos del texto fuente (PDF) recuperados por seccion. */
   documentEvidenceActive?: boolean;
+  /** true si se cargo el ultimo reporte de seguimiento n8n como fuente consolidada. */
+  latestReportAvailable?: boolean;
   /** Numero de tareas incluidas efectivamente en el contexto general. */
   projectTasksLoaded?: number;
   /** Total de tareas disponibles en la base para el proyecto. */
@@ -87,7 +94,12 @@ export interface TareaContext {
   fin?: string | null;
   completado?: boolean | null;
   estado?: string | null;
+  estado_seguimiento?: string | null;
+  dateLastActivity?: string | null;
+  fecha_sincronizacion?: string | null;
+  fecha_revision?: string | null;
   created_at?: string | null;
+  updated_at?: string | null;
 }
 
 export interface RevisionContext {

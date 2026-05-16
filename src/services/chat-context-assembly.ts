@@ -5,7 +5,9 @@ import {
 } from "@/src/lib/document-sections";
 import { getPhaseMode, type PhaseMode } from "@/src/lib/fases";
 import { truncateText } from "@/src/lib/chat-text";
+import { buildTaskContext } from "@/src/services/chat-report-context";
 import type { ChatUserIntent, RevisionContext, TareaContext } from "@/src/types/chat";
+import type { ReporteSeguimiento } from "@/src/types/reporte-seguimiento";
 
 export type RevisionFormatLimits = {
   maxPdf: number;
@@ -162,8 +164,9 @@ export function assembleSingleTaskModelContext(params: {
   maxHistoryMsg: number;
   userMessage?: string | null;
   intent?: ChatUserIntent;
+  latestReport?: ReporteSeguimiento | null;
 }): AssembledSingleTaskContext {
-  const { variant, tarea, doc, code, history, limits, maxDesc, maxHistoryMsg, userMessage, intent } = params;
+  const { variant, tarea, doc, code, history, limits, maxDesc, maxHistoryMsg, userMessage, intent, latestReport } = params;
   const phaseMode = getPhaseMode(tarea.fase);
 
   const header =
@@ -178,6 +181,10 @@ export function assembleSingleTaskModelContext(params: {
     `Titulo: ${tarea.titulo}`,
     `Fase: ${tarea.fase}`,
     ...formatTaskOperationalMetadata(tarea),
+    `Estado seguimiento: ${tarea.estado_seguimiento?.trim() || "N/D"}`,
+    `Ultima actividad Trello: ${tarea.dateLastActivity?.trim() || "N/D"}`,
+    `Actualizado en: ${tarea.updated_at?.trim() || "N/D"}`,
+    `Fecha sincronizacion: ${tarea.fecha_sincronizacion?.trim() || "N/D"}`,
     `URL Trello: ${tarea.url_tarjeta?.trim() || "N/D"}`,
     `Modo de contexto segun fase: ${phaseMode === "mixto" ? "mixto (documental + codigo)" : "documental (solo documentacion)"}`,
     `Descripcion: ${truncateText(tarea.descripcion, maxDesc)}`,
@@ -223,6 +230,13 @@ export function assembleSingleTaskModelContext(params: {
       "Esta tarea esta en fase documental (o la fase no requiere revision de codigo): el contexto NO incluye PR, diff, analisis de codigo ni extractos de codigo.",
     );
   }
+
+  lines.push(
+    "",
+    "## Complemento de reporte n8n para esta tarea",
+    "Este bloque complementa Trello, documentos y codigo. No sustituye las revisiones cuando la pregunta sea documental o tecnica.",
+    buildTaskContext(tarea, latestReport ?? null),
+  );
 
   const historyTitle =
     variant === "tarea_thread"

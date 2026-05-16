@@ -1,5 +1,40 @@
 import type { ChatPromptMeta } from "@/src/types/chat";
 
+function appendReportSourceRules(meta: ChatPromptMeta): string[] {
+  const lines = [
+    "",
+    "## Fuentes SICOP: reporte n8n vs Trello",
+    "El proyecto tiene dos fuentes: el ultimo reporte de seguimiento n8n (fotografia consolidada) y las tareas/Trello sincronizadas (estado operativo).",
+    "Para preguntas generales del proyecto, presupuesto, KPIs, riesgos, recomendaciones, estado consolidado y ultimo reporte, prioriza el bloque 'Ultimo reporte de seguimiento n8n'.",
+    "Para preguntas sobre una tarea especifica, usa Trello/tarea sincronizada para estado operativo si es mas reciente, y usa detalle_por_tarea del reporte para presupuesto si existe.",
+    "Para preguntas de cumplimiento documental, prioriza el texto fuente recuperado, el texto PDF y el analisis_documental de la tarea; el reporte solo complementa.",
+    "Para preguntas tecnicas o de implementacion, prioriza revision de codigo, Pull Request, codigo_pr y analisis_codigo; el reporte solo complementa.",
+    "Para recomendaciones de una tarea especifica, usa primero las recomendaciones u observaciones contenidas en analisis_documental/analisis_codigo y despues el reporte si aporta contexto.",
+    "No asumas que Trello y el reporte estan sincronizados. Si el contexto indica conflicto o frescura comparada, explicalo en la respuesta.",
+    "Si no hay fechas suficientes, toma el ultimo reporte como referencia consolidada y aclara que conviene revisar la sincronizacion.",
+    "Si no existe reporte, dilo: 'No existe un reporte de seguimiento generado todavia.'",
+  ];
+
+  if (!meta.latestReportAvailable) {
+    lines.push("El contexto indica que no hay reporte disponible; no inventes presupuesto, KPIs, riesgos ni recomendaciones del reporte.");
+  }
+
+  return lines;
+}
+
+function appendBudgetAndKpiRules(): string[] {
+  return [
+    "",
+    "## Presupuesto y KPIs",
+    "Para presupuesto usa los valores guardados en reportes_seguimiento: presupuesto_total, costo_real_total, variacion_costo, ejecucion_presupuestaria, estado_presupuesto y presupuesto.*.",
+    "No recalcules ni reemplaces esos valores si ya estan en el contexto.",
+    "presupuesto_total es el presupuesto inicial total del proyecto; costo_real_total es el costo real acumulado; variacion_costo es saldo/diferencia; ejecucion_presupuestaria es el porcentaje consolidado.",
+    "No confundas cumplimiento_presupuesto_registrado con ejecucion presupuestaria general, ni costo_estimado_registrado con presupuesto total.",
+    "Para KPIs usa kpis y resumen_kpis del reporte. No inventes formulas ni recalcules KPIs si ya vienen registrados.",
+    "Si falta informacion presupuestaria o de KPIs en el reporte, dilo claramente.",
+  ];
+}
+
 function appendDocumentSourceRules(meta: ChatPromptMeta): string[] {
   const intent = meta.intent ?? "consulta";
   if (intent === "conversacional") return [];
@@ -347,6 +382,61 @@ function appendQuestionKindRules(meta: ChatPromptMeta): string[] {
     ];
   }
 
+  if (kind === "budget") {
+    return [
+      ...common,
+      "Tipo detectado: presupuesto.",
+      "Usa primero el presupuesto consolidado del ultimo reporte. Si el usuario pide una tarea especifica, usa detalle_por_tarea y despues la descripcion Trello como respaldo.",
+      "Responde con cifras del contexto y aclara si falta algun dato.",
+    ];
+  }
+
+  if (kind === "kpis") {
+    return [
+      ...common,
+      "Tipo detectado: KPIs.",
+      "Usa primero kpis y resumen_kpis del ultimo reporte.",
+      "Puedes mencionar cumplimiento del cronograma, tasa de defectos, productividad, cumplimiento de requerimientos y eficiencia de flujo solo si constan en el contexto.",
+    ];
+  }
+
+  if (kind === "latest_report") {
+    return [
+      ...common,
+      "Tipo detectado: ultimo reporte.",
+      "Resume el ultimo reporte de seguimiento con fecha, estado general, presupuesto, KPIs, riesgos/recomendaciones y archivo si existe.",
+      "Si no hay reporte, dilo sin inventar.",
+    ];
+  }
+
+  if (kind === "recommendations") {
+    if (!meta.generalBroad) {
+      return [
+        ...common,
+        "Tipo detectado: recomendaciones sobre una tarea.",
+        "Usa primero analisis_documental, analisis_codigo, el bloque comparativo documento vs codigo y la descripcion Trello de la tarea.",
+        "Usa el complemento del reporte n8n solo si aporta presupuesto, estado consolidado o una recomendacion relacionada con esa tarea.",
+        "No sustituyas recomendaciones de revisiones anteriores por recomendaciones generales del reporte.",
+      ];
+    }
+
+    return [
+      ...common,
+      "Tipo detectado: recomendaciones.",
+      "Prioriza recomendaciones, sugerencias, riesgos y proximas acciones extraidas del resumen_ia o html_reporte del ultimo reporte.",
+      "Complementa con Trello solo si el reporte no trae detalle suficiente.",
+    ];
+  }
+
+  if (kind === "task_status_counts") {
+    return [
+      ...common,
+      "Tipo detectado: conteos de tareas.",
+      "Para conteos generales usa primero total_tareas, tareas_completadas, tareas_en_curso, tareas_proximas, tareas_atrasadas, tareas_sin_fecha y tareas_en_plazo del ultimo reporte.",
+      "Si el usuario pide nombres exactos de tareas, usa las tareas sincronizadas desde Trello del contexto.",
+    ];
+  }
+
   return common;
 }
 
@@ -380,6 +470,8 @@ export function buildChatSystemPrompt(meta: ChatPromptMeta): string {
       "Responde de forma directa y clara; puedes usar listas con guiones o numeros cuando ayuden a leer.",
       "No uses la estructura obligatoria por secciones (Resumen, Cumplimiento, Observaciones, Riesgos, Recomendacion).",
       "Evita informes largos salvo que la pregunta lo exija de forma evidente.",
+      ...appendReportSourceRules(meta),
+      ...appendBudgetAndKpiRules(),
       ...appendQuestionKindRules(meta),
       ...appendScopeRulesConsulta(meta),
       ...appendDocumentSourceRules(meta),
@@ -392,6 +484,8 @@ export function buildChatSystemPrompt(meta: ChatPromptMeta): string {
     "No afirmes cumplimiento Completo si la evidencia no lo respalda.",
     "",
     STRUCTURED_SECTIONS,
+    ...appendReportSourceRules(meta),
+    ...appendBudgetAndKpiRules(),
     ...appendQuestionKindRules(meta),
     ...appendScopeRulesAnalisis(meta),
     ...appendTechnicalCodeEvidenceRules(meta),

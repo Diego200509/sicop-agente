@@ -56,7 +56,7 @@ export async function getReporteSeguimientoById(id: string): Promise<ReporteSegu
     throw new Error(`No se pudo obtener el reporte de seguimiento: ${error.message}`);
   }
 
-  return data ? mapReporteSeguimiento(data as ReporteSeguimientoRow) : null;
+  return data ? mapReporteSeguimiento(data as unknown as ReporteSeguimientoRow) : null;
 }
 
 function mapReporteSeguimiento(row: ReporteSeguimientoRow): ReporteSeguimiento {
@@ -75,6 +75,7 @@ function mapReporteSeguimiento(row: ReporteSeguimientoRow): ReporteSeguimiento {
     tareas_sin_fecha: normalizeNumber(row.tareas_sin_fecha),
     tareas_en_plazo: normalizeNumber(row.tareas_en_plazo),
     kpis: normalizeKpis(row.kpis),
+    resumen_kpis: row.resumen_kpis ?? null,
     kpi_cumplimiento_cronograma: normalizeOptionalNumber(row.kpi_cumplimiento_cronograma),
     kpi_tasa_defectos: normalizeOptionalNumber(row.kpi_tasa_defectos),
     kpi_productividad_equipo: normalizeOptionalNumber(row.kpi_productividad_equipo),
@@ -87,6 +88,7 @@ function mapReporteSeguimiento(row: ReporteSeguimientoRow): ReporteSeguimiento {
     ejecucion_presupuestaria: normalizeNumber(row.ejecucion_presupuestaria),
     estado_presupuesto: normalizeEstadoPresupuesto(row.estado_presupuesto),
     html_reporte: row.html_reporte ?? null,
+    resumen_ia: row.resumen_ia ?? null,
     mensaje_html: row.mensaje_html ?? null,
     archivo_nombre: row.archivo_nombre ?? null,
     archivo_url: row.archivo_url ?? null,
@@ -99,6 +101,52 @@ function mapReporteSeguimiento(row: ReporteSeguimientoRow): ReporteSeguimiento {
     metadata: row.metadata ?? null,
     created_at: row.created_at,
   };
+}
+
+export async function getLatestSeguimientoReport(): Promise<ReporteSeguimiento | null> {
+  const supabase = getBackendSupabaseClient();
+  const { data, error } = await supabase
+    .from("reportes_seguimiento")
+    .select(
+      [
+        "id",
+        "titulo",
+        "tipo_reporte",
+        "fecha_revision",
+        "created_at",
+        "enviado_en",
+        "total_tareas",
+        "tareas_completadas",
+        "tareas_en_curso",
+        "tareas_proximas",
+        "tareas_atrasadas",
+        "tareas_sin_fecha",
+        "tareas_en_plazo",
+        "kpis",
+        "resumen_kpis",
+        "presupuesto",
+        "presupuesto_total",
+        "costo_real_total",
+        "variacion_costo",
+        "ejecucion_presupuestaria",
+        "estado_presupuesto",
+        "resumen_ia",
+        "html_reporte",
+        "archivo_url",
+        "estado",
+        "metadata",
+      ].join(","),
+    )
+    .order("fecha_revision", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`No se pudo obtener el ultimo reporte de seguimiento: ${error.message}`);
+  }
+
+  return data ? mapReporteSeguimiento(data as unknown as ReporteSeguimientoRow) : null;
 }
 
 function getMetadataString(metadata: unknown, key: string): string | null {

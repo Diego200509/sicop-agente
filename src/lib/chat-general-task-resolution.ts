@@ -8,6 +8,8 @@ const STOP_WORDS = new Set([
   "analizar",
   "como",
   "con",
+  "costo",
+  "costos",
   "cual",
   "cuales",
   "dame",
@@ -17,6 +19,9 @@ const STOP_WORDS = new Set([
   "donde",
   "el",
   "en",
+  "estado",
+  "estimado",
+  "estimados",
   "esa",
   "ese",
   "eso",
@@ -28,6 +33,8 @@ const STOP_WORDS = new Set([
   "hablame",
   "haz",
   "hay",
+  "hora",
+  "horas",
   "la",
   "las",
   "le",
@@ -43,11 +50,14 @@ const STOP_WORDS = new Set([
   "o",
   "para",
   "por",
+  "presupuesto",
+  "presupuestario",
   "que",
   "quiero",
   "qué",
   "revisa",
   "revisar",
+  "real",
   "se",
   "si",
   "sin",
@@ -86,7 +96,22 @@ export function extractKeywords(message: string): string[] {
   return [...new Set(parts)];
 }
 
-export type TaskForMatch = Pick<TareaContext, "id" | "id_tarea" | "titulo">;
+export type TaskForMatch = Pick<TareaContext, "id" | "id_tarea" | "titulo"> &
+  Partial<Pick<TareaContext, "fase" | "descripcion" | "url_tarjeta">>;
+
+function extractTechnicalIds(text: string | null | undefined): string[] {
+  if (!text?.trim()) return [];
+
+  const ids = new Set<string>();
+  for (const match of text.matchAll(/(?:^|\n)\s*(?:ID|Codigo|C[oó]digo)\s*:\s*([A-Z]{2,4}\d{1,3})\b/gi)) {
+    if (match[1]) ids.add(match[1].toLowerCase());
+  }
+  for (const match of text.matchAll(/\b(PL|AR|DI|DS|QA|GP|CP)\d{1,3}\b/gi)) {
+    if (match[0]) ids.add(match[0].toLowerCase());
+  }
+
+  return [...ids];
+}
 
 export type ScoredTask = {
   score: number;
@@ -99,6 +124,9 @@ export function scoreTaskMatch(message: string, task: TaskForMatch): number {
   const normMsg = normalizeText(message);
   const idLower = task.id_tarea.trim().toLowerCase();
   const normTitle = normalizeText(task.titulo);
+  const normPhase = normalizeText(task.fase ?? "");
+  const normUrl = normalizeText(task.url_tarjeta ?? "");
+  const technicalIds = extractTechnicalIds(`${task.id_tarea}\n${task.titulo}\n${task.descripcion ?? ""}`);
   const titleWords = normTitle.split(" ").filter((w) => w.length > 1);
 
   if (idLower.length >= 8 && raw.toLowerCase().includes(idLower)) {
@@ -126,10 +154,21 @@ export function scoreTaskMatch(message: string, task: TaskForMatch): number {
     score += 120;
   }
 
+  for (const technicalId of technicalIds) {
+    if (technicalId.length >= 3 && normMsg.split(" ").includes(technicalId)) {
+      score += 500;
+    }
+  }
+
+  if (normUrl.length >= 10 && normMsg.includes(normUrl)) {
+    score += 500;
+  }
+
   const keywords = extractKeywords(message);
   for (const kw of keywords) {
     if (kw.length < 3) continue;
     if (normTitle.includes(kw)) score += 18;
+    if (normPhase.includes(kw)) score += 4;
     for (const tw of titleWords) {
       if (tw === kw) score += 25;
       else if (tw.length >= 4 && kw.length >= 4 && (tw.startsWith(kw) || kw.startsWith(tw))) score += 14;
