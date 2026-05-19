@@ -13,6 +13,7 @@ import { createClient } from "@supabase/supabase-js";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { NextResponse } from "next/server";
+import { resolvePdfAndEmailHtml, stripActionableSuggestionsFromHtml } from "@/src/lib/report-sent-html";
 import { HTMLElement, NodeType, parse, type Node as HtmlNode } from "node-html-parser";
 
 export const runtime = "nodejs";
@@ -48,6 +49,8 @@ type ReportMetadata = {
 
 type GeneratePdfPayload = {
   html?: string;
+  mensaje_html?: string;
+  mensaje_html_pdf?: string;
   filename?: string;
   metadata?: ReportMetadata | string;
   tareas_en_curso?: number | string;
@@ -473,11 +476,11 @@ const styles = StyleSheet.create({
 export async function POST(request: Request) {
   try {
     const payload = (await request.json()) as GeneratePdfPayload;
-    const html = typeof payload.html === "string" ? payload.html.trim() : "";
+    const { pdfHtml, mensajeHtml } = resolvePdfAndEmailHtml(payload);
 
-    if (!html) {
+    if (!pdfHtml) {
       return NextResponse.json(
-        { error: "El HTML del reporte es obligatorio" },
+        { error: "El HTML para PDF (html o mensaje_html_pdf) es obligatorio" },
         { status: 400 },
       );
     }
@@ -488,14 +491,15 @@ export async function POST(request: Request) {
     const kpiItems = buildPdfKpiItems(metadata);
     const budgetInfo = buildPdfBudgetInfo(metadata);
     const blocks = ensureBudgetMarker(
-      ensureKpiMarker(parseHtmlToReportBlocks(html), kpiItems),
+      ensureKpiMarker(parseHtmlToReportBlocks(stripActionableSuggestionsFromHtml(pdfHtml)), kpiItems),
       budgetInfo,
     );
     const pdfBuffer = await renderReportPdf(blocks, fechaRevision, kpiItems, budgetInfo);
 
     await persistGeneratedReport({
       title: REPORT_RECORD_TITLE,
-      html,
+      htmlReporte: pdfHtml,
+      mensajeHtml,
       filename,
       fechaRevision,
       metadata,
@@ -1440,14 +1444,16 @@ function normalizeKpiKey(value: string): string {
 
 async function persistGeneratedReport({
   title,
-  html,
+  htmlReporte,
+  mensajeHtml,
   filename,
   fechaRevision,
   metadata,
   pdfBuffer,
 }: {
   title: string;
-  html: string;
+  htmlReporte: string;
+  mensajeHtml: string | null;
   filename: string;
   fechaRevision: string;
   metadata?: ReportMetadata;
@@ -1519,8 +1525,8 @@ async function persistGeneratedReport({
       kpi_eficiencia_flujo: getMetadataOptionalNumber(metadata, "kpi_eficiencia_flujo"),
       presupuesto: getMetadataPresupuesto(metadata),
       ...buildBudgetPersistenceFields(metadata),
-      html_reporte: html,
-      mensaje_html: html,
+      html_reporte: htmlReporte,
+      mensaje_html: mensajeHtml,
       archivo_nombre: filename,
       archivo_url: archivoUrl,
       archivo_path: archivoPath,

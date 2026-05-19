@@ -35,6 +35,7 @@ import {
   TableRow,
 } from "@/src/components/ui/table";
 import { useReportesSeguimiento } from "@/src/hooks/useReportesSeguimiento";
+import { resolveSentReportHtml } from "@/src/lib/report-sent-html";
 import { cn } from "@/src/lib/utils";
 import type {
   ReporteSeguimiento,
@@ -505,7 +506,7 @@ function ReporteDetalleModal({
   onTabChange: (tab: DetailTab) => void;
   onClose: () => void;
 }) {
-  const html = reporte.mensaje_html || reporte.html_reporte || "";
+  const html = useMemo(() => resolveSentReportHtml(reporte), [reporte]);
   const metadataText = useMemo(() => JSON.stringify(reporte.metadata ?? {}, null, 2), [reporte.metadata]);
 
   useEffect(() => {
@@ -627,8 +628,10 @@ function ReporteDetalleModal({
               <>
                 <style>{`
                   .report-html-preview {
-                    color: #222222;
+                    color: #1f2937;
                     color-scheme: light;
+                    font-family: Arial, Helvetica, sans-serif;
+                    line-height: 1.55;
                   }
 
                   .report-html-preview :where(div, section, article, main, body) {
@@ -641,21 +644,96 @@ function ReporteDetalleModal({
                     text-underline-offset: 2px;
                   }
 
+                  .report-html-preview h2 {
+                    margin: 26px 0 14px;
+                    font-size: 21px;
+                    font-weight: 700;
+                    color: #0f2747;
+                    border-bottom: 2px solid #38bdf8;
+                    padding-bottom: 8px;
+                  }
+
+                  .report-html-preview h2:first-child {
+                    margin-top: 0;
+                  }
+
+                  .report-html-preview p {
+                    margin: 0 0 14px;
+                    font-size: 14px;
+                    color: #475569;
+                    line-height: 1.55;
+                  }
+
+                  .report-html-preview ul,
+                  .report-html-preview ol {
+                    margin: 10px 0 18px;
+                    padding-left: 22px;
+                  }
+
+                  .report-html-preview li {
+                    margin-bottom: 8px;
+                    font-size: 14px;
+                    color: #334155;
+                    line-height: 1.55;
+                  }
+
                   .report-html-preview table {
                     width: 100%;
                     border-collapse: collapse;
                     color: #2b2b2b;
                   }
 
-                  .report-html-preview th {
-                    color: #222222;
-                    font-weight: 700;
+                  .report-html-preview table:not([role="presentation"]) {
+                    margin: 12px 0 22px;
+                    border: 1px solid #dbe3ef;
+                    border-radius: 10px;
+                    overflow: hidden;
+                    background: #ffffff;
                   }
 
-                  .report-html-preview td,
-                  .report-html-preview th {
-                    padding: 8px 10px;
+                  .report-html-preview table:not([role="presentation"]) th {
+                    background: #f1f5f9;
+                    color: #0f2747;
+                    font-weight: 700;
+                    font-size: 12px;
+                    text-align: left;
+                    border-bottom: 1px solid #dbe3ef;
+                  }
+
+                  .report-html-preview table:not([role="presentation"]) td {
+                    border-bottom: 1px solid #e2e8f0;
+                    font-size: 13px;
+                    color: #334155;
+                  }
+
+                  .report-html-preview table:not([role="presentation"]) tr:last-child td {
+                    border-bottom: none;
+                  }
+
+                  .report-html-preview th,
+                  .report-html-preview td {
+                    padding: 10px 12px;
                     vertical-align: top;
+                  }
+
+                  .report-html-preview hr {
+                    border: none;
+                    border-top: 1px solid #d6dee8;
+                    margin: 28px 0 22px;
+                  }
+
+                  .report-html-preview .sugerencias-accionables-ia {
+                    margin-top: 28px;
+                    padding-top: 18px;
+                    border-top: 2px solid #dbe3ef;
+                  }
+
+                  .report-html-preview .sugerencia-accionable {
+                    border: 1px solid #dbe3ef;
+                    border-radius: 10px;
+                    padding: 14px;
+                    margin: 12px 0;
+                    background: #f8fafc;
                   }
                 `}</style>
                 <div
