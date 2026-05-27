@@ -21,8 +21,6 @@ type ReportesResumen = {
   tareasSinFecha: number;
 };
 
-const TOTAL_TAREAS_ANALIZADAS = 22;
-
 type UseReportesSeguimientoResult = {
   reportes: ReporteSeguimiento[];
   reportesFiltrados: ReporteSeguimiento[];
@@ -116,7 +114,7 @@ export function useReportesSeguimiento({
     return {
       totalReportes: reportes.length,
       ultimoReporte,
-      totalTareas: ultimoReporte ? TOTAL_TAREAS_ANALIZADAS : 0,
+      totalTareas: ultimoReporte?.total_tareas ?? 0,
       tareasCompletadas: ultimoReporte?.tareas_completadas ?? 0,
       tareasEnCurso: ultimoReporte?.tareas_en_curso ?? 0,
       tareasEnPlazo: ultimoReporte?.tareas_en_plazo ?? 0,

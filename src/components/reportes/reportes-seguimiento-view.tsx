@@ -43,7 +43,6 @@ import type {
 } from "@/src/types/reporte-seguimiento";
 
 type DetailTab = "pdf" | "html" | "metadata";
-const TOTAL_TAREAS_ANALIZADAS = 22;
 
 const estadoOptions = [
   { value: "todos", label: "Todos" },
@@ -214,7 +213,7 @@ export function ReportesSeguimientoView({
                         </p>
                       </div>
                     </TableCell>
-                    <MetricCell value={TOTAL_TAREAS_ANALIZADAS} />
+                    <MetricCell value={reporte.total_tareas ?? 0} />
                     <MetricCell value={reporte.tareas_completadas} />
                     <MetricCell value={reporte.tareas_en_curso ?? 0} />
                     <MetricCell value={reporte.tareas_en_plazo} />
@@ -558,7 +557,7 @@ function ReporteDetalleModal({
             <SecondaryMetric
               key={key}
               label={metricLabels[key]}
-              value={key === "total_tareas" ? TOTAL_TAREAS_ANALIZADAS : (reporte[key] ?? 0)}
+              value={reporte[key] ?? 0}
             />
           ))}
         </div>

@@ -9,7 +9,7 @@ import {
   View,
   pdf,
 } from "@react-pdf/renderer";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { NextResponse } from "next/server";
@@ -154,7 +154,6 @@ const KPI_DEFINITIONS: Array<{
 const DEFAULT_FILENAME = "reporte-seguimiento-sicop.pdf";
 const STORAGE_BUCKET = "reportes-pdf";
 const REPORT_RECORD_TITLE = "Reporte automático de seguimiento SICOP";
-const TOTAL_TAREAS_ANALIZADAS = 22;
 const REPORT_TITLE = "Reporte Automático - Proyecto SICOP";
 const REPORT_SUBTITLE = "Agente autónomo de seguimiento del tablero Trello";
 const REPORT_FOOTER = "Reporte generado automáticamente por el agente autónomo SICOP.";
@@ -1504,12 +1503,13 @@ async function persistGeneratedReport({
 
   try {
     const destinatarios = getMetadataString(metadata, "destinatarios") ?? getMetadataString(metadata, "enviado_a");
+    const totalTareas = getMetadataOptionalNumber(metadata, "total_tareas") ?? (await countCurrentTasks(supabase));
 
     const { error } = await supabase.from("reportes_seguimiento").insert({
       titulo: title,
       tipo_reporte: "seguimiento_autonomo",
       fecha_revision: toSupabaseRevisionDate(fechaRevision),
-      total_tareas: getMetadataNumber(metadata, "total_tareas", TOTAL_TAREAS_ANALIZADAS),
+      total_tareas: totalTareas,
       tareas_completadas: getMetadataNumber(metadata, "tareas_completadas"),
       tareas_en_curso: getMetadataNumber(metadata, "tareas_en_curso"),
       tareas_proximas: getMetadataNumber(metadata, "tareas_proximas"),
@@ -1549,6 +1549,20 @@ async function persistGeneratedReport({
 
 function buildStoragePath(): string {
   return `reportes/reporte-seguimiento-sicop-${Date.now()}.pdf`;
+}
+
+async function countCurrentTasks(supabase: SupabaseClient): Promise<number> {
+  const { count, error } = await supabase.from("tareas").select("id", {
+    count: "exact",
+    head: true,
+  });
+
+  if (error) {
+    console.error("No se pudo contar tareas actuales para el reporte:", error);
+    return 0;
+  }
+
+  return count ?? 0;
 }
 
 function getMetadataNumber(
